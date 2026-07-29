@@ -38,7 +38,13 @@ module.exports = async function handler(req, res) {
   const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'unknown';
   if (rateLimited(ip)) return res.status(429).json({ error: 'Rate limit reached — try again later.' });
 
-  const { prompt, level } = req.body || {};
+  /* Vercel may deliver the body already parsed, as a raw string, or as a Buffer */
+  let body = req.body;
+  if (Buffer.isBuffer(body)) body = body.toString('utf8');
+  if (typeof body === 'string') { try { body = JSON.parse(body); } catch (_) { body = {}; } }
+  if (!body || typeof body !== 'object') body = {};
+
+  const { prompt, level } = body;
   if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 4000)
     return res.status(400).json({ error: 'Invalid prompt' });
 
@@ -60,10 +66,18 @@ module.exports = async function handler(req, res) {
       })
     });
 
-    const data = await r.json();
-    if (!r.ok) {
-      console.error('Anthropic API error:', data);
-      return res.status(502).json({ error: (data.error && data.error.message) || 'Upstream API error' });
+    const rawText = await r.text();
+    let data = null;
+    try { data = JSON.parse(rawText); } catch (_) {}
+
+    if (!r.ok || !data) {
+      const msg = (data && data.error && data.error.message) || ('Anthropic API returned HTTP ' + r.status + ': ' + rawText.slice(0, 300));
+      console.error('Anthropic API error:', r.status, rawText.slice(0, 500));
+      return res.status(502).json({ error: msg });
+    }
+    if (!Array.isArray(data.content)) {
+      console.error('Unexpected Anthropic payload:', rawText.slice(0, 500));
+      return res.status(502).json({ error: 'Unexpected Anthropic payload: ' + rawText.slice(0, 300) });
     }
     return res.status(200).json({ content: data.content });
   } catch (err) {

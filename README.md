@@ -75,6 +75,25 @@ Note: the per-IP rate limiter in serverless mode resets on cold starts — good 
 
 Any Node host works (Render, Railway, Fly.io, a VPS): `npm start` runs the Express server. Set `ANTHROPIC_API_KEY` in the host's dashboard — don't upload `.env`. GitHub Pages alone won't run a backend (static only); the site falls back to simulation mode there.
 
+## Troubleshooting the API link
+
+The HUD shows **LINK: LIVE / SIM / ERROR** (top right). Hover it, or open the browser console, for the exact reason. Fastest check — visit `https://your-site.vercel.app/api/health`:
+
+| What you see | Meaning | Fix |
+|---|---|---|
+| `{"ok":true,"keyPresent":true}` | Backend live, key present | You're good — questions hit Claude |
+| `{"ok":true,"keyPresent":false}` | Function deployed, **no key** | Add `ANTHROPIC_API_KEY` in Vercel → Settings → Environment Variables, then **redeploy** |
+| 404 / HTML page | The `api/` folder didn't deploy | Confirm `api/chat.js` is committed and pushed, then redeploy |
+
+Common causes of "questions don't work":
+
+1. **Key added but not redeployed.** Vercel only injects env vars at build time — after adding the key, trigger a redeploy (Deployments → ⋯ → Redeploy).
+2. **Wrong environment.** Make sure the variable is enabled for **Production** (and Preview, if you test preview URLs).
+3. **Model name.** If Anthropic returns `model not found`, set `ANTHROPIC_MODEL` to a model your account can access.
+4. **Credits.** A key with no billing credits returns an auth/quota error — the panel now displays the API's exact message.
+
+In auto mode the site never breaks: if the live link fails, it shows the error *and* falls back to the stored briefing, so visitors always get content.
+
 ## Cost note
 
 Each live question is one Claude API call. The rate limiter caps per-visitor usage; adjust `RATE_LIMIT_PER_HOUR` in `.env` to tune cost vs. generosity.

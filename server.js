@@ -37,6 +37,16 @@ function rateLimited(ip) {
 app.use(express.json({ limit: '10kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+/* health check — lets the front end show LINK: LIVE / SIM / ERROR */
+app.get('/api/health', (req, res) => {
+  res.json({
+    ok: true,
+    keyPresent: Boolean(API_KEY),
+    model: MODEL,
+    runtime: 'express'
+  });
+});
+
 app.post('/api/chat', async (req, res) => {
   try {
     if (!API_KEY) return res.status(503).json({ error: 'Backend running without ANTHROPIC_API_KEY — set it in .env' });
@@ -65,10 +75,18 @@ app.post('/api/chat', async (req, res) => {
       })
     });
 
-    const data = await r.json();
-    if (!r.ok) {
-      console.error('Anthropic API error:', data);
-      return res.status(502).json({ error: data.error?.message || 'Upstream API error' });
+    const rawText = await r.text();
+    let data = null;
+    try { data = JSON.parse(rawText); } catch (_) {}
+
+    if (!r.ok || !data) {
+      const msg = data?.error?.message || ('Anthropic API returned HTTP ' + r.status + ': ' + rawText.slice(0, 300));
+      console.error('Anthropic API error:', r.status, rawText.slice(0, 500));
+      return res.status(502).json({ error: msg });
+    }
+    if (!Array.isArray(data.content)) {
+      console.error('Unexpected Anthropic payload:', rawText.slice(0, 500));
+      return res.status(502).json({ error: 'Unexpected Anthropic payload: ' + rawText.slice(0, 300) });
     }
     res.json({ content: data.content });
   } catch (err) {

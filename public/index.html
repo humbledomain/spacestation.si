@@ -144,20 +144,24 @@
     animation:flicker 5s infinite;pointer-events:none}
 
   /* ===== holographic panel ===== */
-  .panel{position:fixed;top:50%;left:50%;z-index:20;width:min(720px,92vw);max-height:82vh;
-    transform:translate(-50%,-50%) scale(.92) perspective(900px) rotateX(6deg);
+  /* fullscreen holographic console */
+  .panel{position:fixed;inset:0;z-index:20;
+    transform:scale(1.04);
     opacity:0;pointer-events:none;transition:.45s cubic-bezier(.2,.9,.3,1.2);
-    background:var(--glass);backdrop-filter:blur(18px) saturate(1.4);
-    border:1px solid rgba(110,231,255,.3);border-radius:6px;
-    box-shadow:0 0 60px rgba(110,231,255,.15),0 30px 80px rgba(0,0,0,.6),inset 0 0 40px rgba(110,231,255,.04);
+    background:rgba(4,9,24,.82);backdrop-filter:blur(22px) saturate(1.4);
+    border:0;border-radius:0;
+    box-shadow:inset 0 0 160px rgba(110,231,255,.06);
     display:flex;flex-direction:column}
-  .panel.open{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) scale(1) perspective(900px) rotateX(0)}
+  .panel.open{opacity:1;pointer-events:auto;transform:none}
+  /* readable centered column inside the fullscreen shell */
+  .panel > *{width:100%;max-width:980px;margin-left:auto;margin-right:auto}
+  .p-body{flex:1}
   .panel::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;
     background:linear-gradient(90deg,transparent,var(--cyan),transparent);
     animation:scanmove 3.5s ease-in-out infinite}
   @keyframes scanmove{0%,100%{opacity:.4}50%{opacity:1}}
   .p-head{display:flex;align-items:center;justify-content:space-between;
-    padding:16px 22px;border-bottom:1px solid rgba(110,231,255,.15)}
+    padding:22px 22px 16px;border-bottom:1px solid rgba(110,231,255,.15);flex:0 0 auto}
   .p-head h2{font-size:.8rem;font-weight:600;letter-spacing:.35em;color:var(--hud);
     text-transform:uppercase;text-shadow:0 0 10px rgba(110,231,255,.6)}
   .p-lvl{font-size:.58rem;letter-spacing:.2em;color:var(--violet);text-transform:uppercase;
@@ -183,7 +187,7 @@
   .cursor{display:inline-block;width:8px;height:14px;background:var(--cyan);
     vertical-align:-2px;animation:blink .8s steps(1) infinite;margin-left:2px}
   @keyframes blink{50%{opacity:0}}
-  .p-input{display:flex;gap:10px;padding:14px 22px;border-top:1px solid rgba(110,231,255,.15)}
+  .p-input{display:flex;gap:10px;padding:14px 22px;border-top:1px solid rgba(110,231,255,.15);flex:0 0 auto}
   .p-input input{flex:1;background:rgba(110,231,255,.05);border:1px solid rgba(110,231,255,.25);
     color:#dbe7ff;padding:10px 16px;font-size:.9rem;outline:none;font-family:inherit;border-radius:3px}
   .p-input input:focus{border-color:var(--cyan);box-shadow:0 0 14px rgba(110,231,255,.25)}
@@ -222,16 +226,22 @@
     .title{top:34%;width:94vw}
     .title h1{letter-spacing:.22em;padding-left:.22em;font-size:1.5rem}
     .title p{letter-spacing:.24em;padding-left:.24em;font-size:.58rem}
-    .dock{bottom:12px;gap:8px;row-gap:8px;flex-wrap:wrap;justify-content:center;
-      width:96vw;align-items:center}
-    .hex{--s:56px;animation:none}
-    .hex .ic{font-size:1.05rem}
-    .hex .lb{font-size:.4rem;letter-spacing:.1em}
-    .panel{width:96vw;max-height:84vh}
-    .p-head{padding:12px 14px}
-    .p-head h2{font-size:.64rem;letter-spacing:.18em}
-    .p-body{padding:14px 14px;font-size:.88rem}
-    .p-input{padding:10px 12px}
+    /* all 7 consoles on ONE line: size from viewport width, icons only */
+    .dock{bottom:14px;left:0;right:0;transform:none;width:100%;
+      padding:0 6px;gap:1vw;flex-wrap:nowrap;justify-content:center;align-items:center}
+    .hex{--s:calc((100vw - 20px - 6vw) / 7);animation:none;gap:0}
+    .hex::after{display:none}
+    .hex .ic{font-size:calc(var(--s) * 0.42)}
+    .hex .lb{display:none}
+    .panel{inset:0}
+    .panel > *{max-width:none}
+    .p-head{padding:14px 14px 10px}
+    .p-head h2{font-size:.6rem;letter-spacing:.14em}
+    .p-lvl{font-size:.5rem;padding:3px 7px;margin-right:8px}
+    .p-body{padding:14px;font-size:.9rem}
+    .p-input{padding:10px 12px;padding-bottom:calc(10px + env(safe-area-inset-bottom))}
+    .p-input input{font-size:.92rem}
+    .demo-tag{font-size:.5rem;padding-bottom:8px}
   }
 </style>
 </head>
@@ -280,7 +290,7 @@
   STARDATE <b id="t-date">—</b><br>
   ALT <b id="t-alt">—</b> KM &nbsp;&middot;&nbsp; VEL <b id="t-vel">—</b> KM/S<br>
   ORBIT <b id="t-orbit">—</b>&deg; &nbsp;&middot;&nbsp; SIGNAL <b>LOCKED</b><br>
-  MODE <b id="t-mode">PILOT</b>
+  MODE <b id="t-mode">PILOT</b> &nbsp;&middot;&nbsp; LINK <b id="t-link">…</b>
 </div>
 
 <div class="readout">
@@ -318,13 +328,13 @@
 
 <div class="dock-hint">select a console</div>
 <div class="dock">
-  <button class="hex" onclick="openPanel('propulsion')"><span class="ic">🚀</span><span class="lb">Propulsion</span></button>
-  <button class="hex" onclick="openPanel('satellites')"><span class="ic">🛰️</span><span class="lb">Orbits</span></button>
-  <button class="hex" onclick="openPanel('exploration')"><span class="ic">🔭</span><span class="lb">Deep Space</span></button>
-  <button class="hex" onclick="openPanel('astro')"><span class="ic">🕳️</span><span class="lb">Astrophysics</span></button>
-  <button class="hex" onclick="openPanel('habitat')"><span class="ic">🧑‍🚀</span><span class="lb">Station Life</span></button>
-  <button class="hex" onclick="openPanel('solar')"><span class="ic">☀️</span><span class="lb">Solar Weather</span></button>
-  <button class="hex" onclick="openPanel('comms')"><span class="ic">📡</span><span class="lb">Comms</span></button>
+  <button class="hex" onclick="openPanel('propulsion')" title="Propulsion Lab" aria-label="Propulsion Lab"><span class="ic">🚀</span><span class="lb">Propulsion</span></button>
+  <button class="hex" onclick="openPanel('satellites')" title="Orbital Mechanics Deck" aria-label="Orbital Mechanics Deck"><span class="ic">🛰️</span><span class="lb">Orbits</span></button>
+  <button class="hex" onclick="openPanel('exploration')" title="Deep Space Observatory" aria-label="Deep Space Observatory"><span class="ic">🔭</span><span class="lb">Deep Space</span></button>
+  <button class="hex" onclick="openPanel('astro')" title="Astrophysics Core" aria-label="Astrophysics Core"><span class="ic">🕳️</span><span class="lb">Astrophysics</span></button>
+  <button class="hex" onclick="openPanel('habitat')" title="Station Life Deck" aria-label="Station Life Deck"><span class="ic">🧑‍🚀</span><span class="lb">Station Life</span></button>
+  <button class="hex" onclick="openPanel('solar')" title="Solar Weather Deck" aria-label="Solar Weather Deck"><span class="ic">☀️</span><span class="lb">Solar Weather</span></button>
+  <button class="hex" onclick="openPanel('comms')" title="Comms — Station AI" aria-label="Comms — Station AI"><span class="ic">📡</span><span class="lb">Comms</span></button>
 </div>
 
 <!-- holographic panel -->
@@ -654,21 +664,104 @@ function toLivePrompt(prompt){
   return LIVE_ACTION_PROMPTS[m[2]] + ' ' + PANELS[m[1]].title + ': ' + PANELS[m[1]].desc;
 }
 
+/* ---- link status indicator (HUD) ---- */
+function setLink(state, detail){
+  const el = document.getElementById('t-link');
+  if (!el) return;
+  const map = { live: ['LIVE', '#34d399'], sim: ['SIM', '#8fa3c8'], error: ['ERROR', '#f87171'], probing: ['…', '#8fa3c8'] };
+  const [txt, col] = map[state] || map.probing;
+  el.textContent = txt;
+  el.style.color = col;
+  el.title = detail || '';
+  if (detail) console.info('[spacestation link] ' + state + ': ' + detail);
+}
+
+/* ---- tolerate any reasonable response shape ---- */
+function extractText(d){
+  if (!d || typeof d !== 'object') return null;
+  if (Array.isArray(d.content)) {
+    const t = d.content.filter(b => b && typeof b.text === 'string').map(b => b.text).join('\n').trim();
+    if (t) return t;
+  }
+  for (const k of ['content', 'reply', 'text', 'completion', 'output_text']) {
+    if (typeof d[k] === 'string' && d[k].trim()) return d[k].trim();
+  }
+  if (d.message && typeof d.message.content === 'string' && d.message.content.trim()) return d.message.content.trim();
+  return null;
+}
+
 async function callAnthropic(prompt){
-  if (DEMO_MODE === true) return demoResponse(prompt);
+  if (DEMO_MODE === true) { setLink('sim', 'DEMO_MODE forced on'); return demoResponse(prompt); }
+
+  let r, raw;
+  /* --- transport --- */
   try {
-    const r = await fetch(API_ENDPOINT, {
+    r = await fetch(API_ENDPOINT, {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ prompt: toLivePrompt(prompt), level: currentLevel })
     });
-    if (!r.ok) throw new Error('uplink failed (' + r.status + ')');
-    const d = await r.json();
-    return d.content?.[0]?.text ?? d.reply ?? '[no response payload]';
+    raw = await r.text();
   } catch (e) {
+    const why = 'backend unreachable at ' + API_ENDPOINT + ' (' + e.message + ')';
+    setLink('sim', why);
     if (DEMO_MODE === 'auto') return demoResponse(prompt);
-    throw e;
+    throw new Error(why);
   }
+
+  /* --- did we even hit an API? (static hosts return HTML with status 200) --- */
+  let d = null;
+  try { d = JSON.parse(raw); } catch (_) {}
+  if (!d) {
+    const why = 'no API function at ' + API_ENDPOINT + ' — got ' + (r.headers.get('content-type') || 'unknown')
+              + ' instead of JSON. Static hosting? Deploy the backend (api/chat.js on Vercel, or npm start).';
+    setLink('sim', why);
+    if (DEMO_MODE === 'auto') return demoResponse(prompt);
+    throw new Error(why);
+  }
+
+  /* --- backend answered but reported a problem: say exactly what --- */
+  const errMsg = d.error && (d.error.message || (typeof d.error === 'string' ? d.error : JSON.stringify(d.error)));
+  if (!r.ok || errMsg) {
+    const msg = String(errMsg || ('HTTP ' + r.status));
+    setLink('error', msg);
+    if (DEMO_MODE === 'auto') {
+      const sim = await demoResponse(prompt);
+      return '⚠ LIVE LINK ERROR (' + r.status + '): ' + msg + '\n\nFalling back to the stored briefing:\n\n' + sim;
+    }
+    throw new Error('Uplink error (' + r.status + '): ' + msg);
+  }
+
+  /* --- 200 but shape unrecognized: show the payload instead of hiding it --- */
+  const text = extractText(d);
+  if (!text) {
+    const why = 'unrecognized payload: ' + raw.slice(0, 240);
+    setLink('error', why);
+    if (DEMO_MODE === 'auto') {
+      const sim = await demoResponse(prompt);
+      return '⚠ LIVE LINK returned an unexpected payload:\n' + raw.slice(0, 240) + '\n\nFalling back to the stored briefing:\n\n' + sim;
+    }
+    throw new Error(why);
+  }
+
+  setLink('live', 'ok');
+  return text;
 }
+
+/* probe the backend on load so the HUD shows LIVE/SIM before first question */
+(async function probeLink(){
+  if (DEMO_MODE === true) return setLink('sim', 'DEMO_MODE forced on');
+  setLink('probing');
+  try {
+    const r = await fetch('/api/health', { method: 'GET' });
+    const txt = await r.text();
+    let d = null; try { d = JSON.parse(txt); } catch (_) {}
+    if (!d) return setLink('sim', 'no /api/health — backend not deployed (site runs on stored knowledge)');
+    if (d.keyPresent) setLink('live', 'backend online, model ' + (d.model || 'default'));
+    else setLink('error', 'backend online but ANTHROPIC_API_KEY is not set in its environment');
+  } catch (e) {
+    setLink('sim', 'backend unreachable (' + e.message + ')');
+  }
+})();
 
 /* ================================================================
    KNOWLEDGE CORES — DEMO[domain][action][level]
