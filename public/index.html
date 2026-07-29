@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SPACESTATION.SI — Orbital Learning</title>
+<meta name="description" content="A superintelligence learning instrument for astrophysics, space travel, satellites, and space exploration — from Cadet to Astrophysicist.">
+<meta name="theme-color" content="#040714">
+<meta property="og:title" content="SPACESTATION.SI">
+<meta property="og:description" content="A hypnotic superintelligence learning instrument for space science. Four clearance levels, from young explorers to PhD.">
+<meta property="og:type" content="website">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  :root{
+    --cyan:#6ee7ff; --indigo:#818cf8; --violet:#c084fc;
+    --hud:rgba(110,231,255,.85); --hud-dim:rgba(110,231,255,.35);
+    --glass:rgba(8,16,38,.55);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;overflow:hidden;background:#01030c;
+    font-family:'Avenir Next','Segoe UI',Futura,Helvetica,sans-serif;color:#dbe7ff;
+    -webkit-font-smoothing:antialiased}
+  canvas#space{position:fixed;inset:0;display:block}
+
+  /* ===== lens / atmosphere layers ===== */
+  .vignette{position:fixed;inset:0;pointer-events:none;z-index:3;
+    background:radial-gradient(ellipse at 50% 55%,transparent 55%,rgba(1,3,12,.85) 100%)}
+  .scanlines{position:fixed;inset:0;pointer-events:none;z-index:3;opacity:.09;
+    background:repeating-linear-gradient(0deg,transparent 0 2px,rgba(110,231,255,.28) 2px 3px)}
+  .grain{position:fixed;inset:0;pointer-events:none;z-index:3;opacity:.05;mix-blend-mode:screen;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.9'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E")}
+  .chroma{position:fixed;inset:0;pointer-events:none;z-index:3;opacity:.5;
+    box-shadow:inset 3px 0 24px rgba(255,60,90,.05), inset -3px 0 24px rgba(60,120,255,.07)}
+
+  /* ===== HUD frame ===== */
+  .corner{position:fixed;width:56px;height:56px;pointer-events:none;z-index:5;
+    border:1px solid var(--hud-dim)}
+  .c-tl{top:14px;left:14px;border-right:0;border-bottom:0}
+  .c-tr{top:14px;right:14px;border-left:0;border-bottom:0}
+  .c-bl{bottom:14px;left:14px;border-right:0;border-top:0}
+  .c-br{bottom:14px;right:14px;border-left:0;border-top:0}
+
+  .logo{position:fixed;top:26px;left:34px;z-index:6}
+  .logo svg{height:54px;width:auto;display:block;filter:drop-shadow(0 0 12px rgba(110,231,255,.35))}
+
+  .telemetry{position:fixed;top:30px;right:38px;z-index:6;text-align:right;
+    font-size:.68rem;letter-spacing:.22em;color:var(--hud);line-height:2;
+    text-transform:uppercase;text-shadow:0 0 8px rgba(110,231,255,.5)}
+  .telemetry b{color:#fff;font-weight:500}
+  #t-mode{color:var(--violet)}
+
+  .readout{position:fixed;left:38px;bottom:120px;z-index:6;font-size:.62rem;
+    letter-spacing:.18em;color:var(--hud-dim);line-height:2.1;text-transform:uppercase}
+  .readout .bar{display:inline-block;width:90px;height:3px;background:rgba(110,231,255,.12);
+    vertical-align:middle;margin-left:8px;position:relative;overflow:hidden}
+  .readout .bar i{position:absolute;inset:0;background:linear-gradient(90deg,var(--cyan),var(--indigo));
+    transform-origin:left;animation:barpulse 5s ease-in-out infinite}
+  .readout .bar i.b2{animation-delay:-2s}.readout .bar i.b3{animation-delay:-3.6s}
+  @keyframes barpulse{0%,100%{transform:scaleX(.55)}50%{transform:scaleX(.92)}}
+
+  .radar{position:fixed;right:38px;bottom:120px;z-index:6;width:110px;height:110px;
+    border-radius:50%;border:1px solid var(--hud-dim);overflow:hidden;
+    background:radial-gradient(circle,rgba(110,231,255,.05),transparent 70%)}
+  .radar::before,.radar::after{content:"";position:absolute;background:rgba(110,231,255,.15)}
+  .radar::before{left:50%;top:0;bottom:0;width:1px}
+  .radar::after{top:50%;left:0;right:0;height:1px}
+  .sweep{position:absolute;inset:0;border-radius:50%;
+    background:conic-gradient(from 0deg,rgba(110,231,255,.45),transparent 70deg,transparent 360deg);
+    animation:sweep 4s linear infinite}
+  @keyframes sweep{to{transform:rotate(360deg)}}
+  .blip{position:absolute;width:4px;height:4px;border-radius:50%;background:var(--cyan);
+    box-shadow:0 0 6px var(--cyan);animation:blip 4s linear infinite}
+  @keyframes blip{0%,12%{opacity:1}45%,100%{opacity:.1}}
+
+  /* target reticle over planet */
+  .reticle{position:fixed;left:50%;bottom:4vh;transform:translateX(-50%);z-index:4;
+    width:36vh;height:36vh;pointer-events:none;opacity:.55}
+  .reticle .r1,.reticle .r2{position:absolute;inset:0;border-radius:50%}
+  .reticle .r1{border:1px dashed rgba(110,231,255,.4);animation:sweep 40s linear infinite}
+  .reticle .r2{inset:24px;border:1px solid rgba(192,132,252,.25);animation:sweep 28s linear infinite reverse}
+  .reticle .tick{position:absolute;left:50%;top:-7px;width:1px;height:14px;background:var(--cyan)}
+  .reticle .lbl{position:absolute;left:calc(100% + 14px);top:22%;white-space:nowrap;
+    font-size:.6rem;letter-spacing:.26em;color:var(--hud);text-transform:uppercase;
+    text-shadow:0 0 8px rgba(110,231,255,.6);animation:flicker 6s infinite}
+  .reticle .lbl small{display:block;color:var(--hud-dim);letter-spacing:.2em;margin-top:4px}
+
+  /* ===== level selector ===== */
+  .levels{position:fixed;left:34px;top:50%;transform:translateY(-50%);z-index:7;
+    display:flex;flex-direction:column;gap:10px}
+  .levels .hdr{font-size:.56rem;letter-spacing:.3em;color:var(--hud-dim);
+    text-transform:uppercase;margin-bottom:2px}
+  .lvl{position:relative;display:flex;flex-direction:column;align-items:flex-start;
+    padding:10px 16px;min-width:168px;cursor:pointer;border:1px solid rgba(110,231,255,.22);
+    background:rgba(8,16,38,.5);backdrop-filter:blur(8px);color:#9fb4dd;
+    clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);
+    transition:.3s;font-family:inherit;text-align:left}
+  .lvl .nm{font-size:.68rem;letter-spacing:.22em;text-transform:uppercase}
+  .lvl .ag{font-size:.56rem;letter-spacing:.12em;color:#5a6f9e;margin-top:3px}
+  .lvl:hover{border-color:var(--cyan);color:#fff}
+  .lvl.active{background:linear-gradient(120deg,rgba(110,231,255,.18),rgba(129,140,248,.12));
+    border-color:var(--cyan);color:#fff;
+    box-shadow:0 0 22px rgba(110,231,255,.28), inset 0 0 18px rgba(110,231,255,.08)}
+  .lvl.active::before{content:"▸";position:absolute;right:10px;top:50%;transform:translateY(-50%);
+    color:var(--cyan);font-size:.7rem;animation:blink 1.2s steps(1) infinite}
+
+  /* ===== hero title ===== */
+  .title{position:fixed;left:50%;top:14%;transform:translateX(-50%);z-index:5;
+    text-align:center;pointer-events:none;transition:opacity 1s}
+  .title h1{font-size:clamp(1.6rem,4.2vw,3.2rem);font-weight:600;letter-spacing:.5em;
+    padding-left:.5em;
+    background:linear-gradient(90deg,var(--cyan),#fff,var(--violet),var(--cyan));
+    background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;
+    animation:shimmer 8s linear infinite;filter:drop-shadow(0 0 18px rgba(110,231,255,.4))}
+  @keyframes shimmer{to{background-position:300% 0}}
+  .title p{margin-top:14px;font-size:.68rem;letter-spacing:.5em;padding-left:.5em;
+    color:var(--hud);text-transform:uppercase;animation:flicker 7s infinite}
+  @keyframes flicker{0%,93%,97%,100%{opacity:.85}94%{opacity:.3}96%{opacity:.6}}
+
+  /* ===== dock ===== */
+  .dock{position:fixed;left:50%;bottom:34px;transform:translateX(-50%);z-index:7;
+    display:flex;gap:15px;align-items:flex-end}
+  .hex{--s:84px;position:relative;width:var(--s);height:calc(var(--s)*1.12);cursor:pointer;
+    clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);
+    background:linear-gradient(160deg,rgba(110,231,255,.14),rgba(129,140,248,.08) 55%,rgba(8,16,38,.7));
+    border:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+    color:#dbe7ff;transition:transform .35s cubic-bezier(.2,.9,.3,1.4),filter .35s;
+    outline:1px solid rgba(110,231,255,.35);outline-offset:-1px;overflow:hidden;
+    animation:hexfloat 6s ease-in-out infinite}
+  .hex::after{content:"";position:absolute;top:0;left:-80%;width:50%;height:100%;
+    background:linear-gradient(100deg,transparent,rgba(255,255,255,.18),transparent);
+    animation:shine 5s ease-in-out infinite}
+  .hex:nth-child(2){animation-delay:-1.5s}.hex:nth-child(3){animation-delay:-3s}.hex:nth-child(4){animation-delay:-4.5s}
+  .hex:nth-child(2)::after{animation-delay:-1.2s}.hex:nth-child(3)::after{animation-delay:-2.4s}.hex:nth-child(4)::after{animation-delay:-3.6s}
+  @keyframes shine{0%,60%{left:-80%}80%{left:120%}100%{left:120%}}
+  @keyframes hexfloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+  .hex:hover{transform:translateY(-12px) scale(1.08);filter:brightness(1.5) drop-shadow(0 0 22px rgba(110,231,255,.55));animation-play-state:paused}
+  .hex .ic{font-size:1.7rem;filter:drop-shadow(0 0 8px rgba(110,231,255,.8))}
+  .hex .lb{font-size:.5rem;letter-spacing:.24em;text-transform:uppercase;color:var(--hud)}
+  .dock-hint{position:fixed;bottom:150px;left:50%;transform:translateX(-50%);z-index:6;
+    font-size:.6rem;letter-spacing:.4em;color:var(--hud-dim);text-transform:uppercase;
+    animation:flicker 5s infinite;pointer-events:none}
+
+  /* ===== holographic panel ===== */
+  .panel{position:fixed;top:50%;left:50%;z-index:20;width:min(720px,92vw);max-height:82vh;
+    transform:translate(-50%,-50%) scale(.92) perspective(900px) rotateX(6deg);
+    opacity:0;pointer-events:none;transition:.45s cubic-bezier(.2,.9,.3,1.2);
+    background:var(--glass);backdrop-filter:blur(18px) saturate(1.4);
+    border:1px solid rgba(110,231,255,.3);border-radius:6px;
+    box-shadow:0 0 60px rgba(110,231,255,.15),0 30px 80px rgba(0,0,0,.6),inset 0 0 40px rgba(110,231,255,.04);
+    display:flex;flex-direction:column}
+  .panel.open{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) scale(1) perspective(900px) rotateX(0)}
+  .panel::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;
+    background:linear-gradient(90deg,transparent,var(--cyan),transparent);
+    animation:scanmove 3.5s ease-in-out infinite}
+  @keyframes scanmove{0%,100%{opacity:.4}50%{opacity:1}}
+  .p-head{display:flex;align-items:center;justify-content:space-between;
+    padding:16px 22px;border-bottom:1px solid rgba(110,231,255,.15)}
+  .p-head h2{font-size:.8rem;font-weight:600;letter-spacing:.35em;color:var(--hud);
+    text-transform:uppercase;text-shadow:0 0 10px rgba(110,231,255,.6)}
+  .p-lvl{font-size:.58rem;letter-spacing:.2em;color:var(--violet);text-transform:uppercase;
+    border:1px solid rgba(192,132,252,.4);padding:4px 10px;border-radius:2px;margin-left:auto;margin-right:14px}
+  .p-close{background:none;border:1px solid rgba(110,231,255,.35);color:var(--hud);
+    width:30px;height:30px;border-radius:3px;cursor:pointer;font-size:.9rem;transition:.3s}
+  .p-close:hover{background:rgba(110,231,255,.15);box-shadow:0 0 12px rgba(110,231,255,.4)}
+  .p-body{padding:20px 24px;overflow-y:auto;line-height:1.8;font-size:.93rem;color:#c9d7f5}
+  .p-body::-webkit-scrollbar{width:5px}
+  .p-body::-webkit-scrollbar-thumb{background:rgba(110,231,255,.3);border-radius:3px}
+  .p-desc{color:#93a7cf;font-size:.85rem;margin-bottom:16px}
+  .p-actions{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px}
+  .abtn{padding:9px 18px;cursor:pointer;font-size:.68rem;letter-spacing:.18em;text-transform:uppercase;
+    background:rgba(110,231,255,.07);color:var(--hud);border:1px solid rgba(110,231,255,.4);
+    clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+    transition:.3s;font-family:inherit}
+  .abtn:hover{background:rgba(110,231,255,.22);color:#fff;box-shadow:0 0 18px rgba(110,231,255,.35)}
+  .feed .msg{margin-bottom:16px;animation:fadeUp .5s both}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1}}
+  .msg .who{font-size:.6rem;letter-spacing:.28em;text-transform:uppercase;margin-bottom:5px}
+  .msg.user .who{color:var(--violet)}.msg.ai .who{color:var(--cyan)}
+  .msg .body{white-space:pre-wrap}
+  .cursor{display:inline-block;width:8px;height:14px;background:var(--cyan);
+    vertical-align:-2px;animation:blink .8s steps(1) infinite;margin-left:2px}
+  @keyframes blink{50%{opacity:0}}
+  .p-input{display:flex;gap:10px;padding:14px 22px;border-top:1px solid rgba(110,231,255,.15)}
+  .p-input input{flex:1;background:rgba(110,231,255,.05);border:1px solid rgba(110,231,255,.25);
+    color:#dbe7ff;padding:10px 16px;font-size:.9rem;outline:none;font-family:inherit;border-radius:3px}
+  .p-input input:focus{border-color:var(--cyan);box-shadow:0 0 14px rgba(110,231,255,.25)}
+  .p-input button{padding:10px 22px;background:linear-gradient(90deg,#22d3ee,#818cf8);
+    border:none;color:#02102a;font-weight:600;letter-spacing:.15em;cursor:pointer;border-radius:3px;
+    text-transform:uppercase;font-size:.7rem;transition:.3s}
+  .p-input button:hover{filter:brightness(1.2);box-shadow:0 0 18px rgba(110,231,255,.5)}
+  .demo-tag{font-size:.58rem;letter-spacing:.14em;color:#4b5f8c;text-align:center;padding:0 20px 12px;text-transform:uppercase}
+
+  /* ===== boot ===== */
+  #boot{position:fixed;inset:0;z-index:100;background:#01030c;display:flex;
+    flex-direction:column;align-items:center;justify-content:center;gap:26px;
+    transition:opacity 1.2s;font-size:.72rem;letter-spacing:.4em;color:var(--hud);
+    text-transform:uppercase}
+  #boot.done{opacity:0;pointer-events:none}
+  .boot-ring{width:74px;height:74px;border-radius:50%;border:1px solid rgba(110,231,255,.2);
+    border-top-color:var(--cyan);animation:sweep 1.1s linear infinite}
+  #bootlog{font-size:.6rem;letter-spacing:.2em;color:var(--hud-dim);height:1.2em}
+  .boot-bar{width:220px;height:2px;background:rgba(110,231,255,.12);overflow:hidden}
+  .boot-bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cyan),var(--violet));
+    transition:width .4s}
+
+  @media (max-width:760px){
+    /* no-overlap mobile layout: logo top-left, levels row under it,
+       title mid-screen, dock wraps in two rows at the bottom */
+    .telemetry,.readout,.radar,.reticle,.dock-hint{display:none}
+    .corner{width:30px;height:30px}
+    .logo{top:12px;left:14px}.logo svg{height:32px}
+    .levels{top:58px;left:10px;right:10px;bottom:auto;transform:none;
+      flex-direction:row;flex-wrap:wrap;gap:6px}
+    .levels .hdr{width:100%;margin-bottom:0}
+    .lvl{min-width:0;flex:1 1 40%;padding:7px 8px}
+    .lvl .ag{display:none}
+    .lvl .nm{font-size:.56rem;letter-spacing:.1em}
+    .lvl.active::before{display:none}
+    .title{top:34%;width:94vw}
+    .title h1{letter-spacing:.22em;padding-left:.22em;font-size:1.5rem}
+    .title p{letter-spacing:.24em;padding-left:.24em;font-size:.58rem}
+    .dock{bottom:12px;gap:8px;row-gap:8px;flex-wrap:wrap;justify-content:center;
+      width:96vw;align-items:center}
+    .hex{--s:56px;animation:none}
+    .hex .ic{font-size:1.05rem}
+    .hex .lb{font-size:.4rem;letter-spacing:.1em}
+    .panel{width:96vw;max-height:84vh}
+    .p-head{padding:12px 14px}
+    .p-head h2{font-size:.64rem;letter-spacing:.18em}
+    .p-body{padding:14px 14px;font-size:.88rem}
+    .p-input{padding:10px 12px}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="space"></canvas>
+<div class="vignette"></div><div class="scanlines"></div><div class="grain"></div><div class="chroma"></div>
+
+<!-- boot sequence -->
+<div id="boot">
+  <div class="boot-ring"></div>
+  <div>SPACESTATION.SI</div>
+  <div class="boot-bar"><i id="bootbar"></i></div>
+  <div id="bootlog">initializing…</div>
+</div>
+
+<!-- HUD -->
+<div class="corner c-tl"></div><div class="corner c-tr"></div>
+<div class="corner c-bl"></div><div class="corner c-br"></div>
+
+<div class="logo">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 64" role="img" aria-label="SPACESTATION.SI">
+    <defs>
+      <linearGradient id="ssGrad" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#7dd3fc"/><stop offset="55%" stop-color="#818cf8"/><stop offset="100%" stop-color="#c084fc"/>
+      </linearGradient>
+      <radialGradient id="coreGrad" cx="50%" cy="45%" r="60%">
+        <stop offset="0%" stop-color="#e0f2fe"/><stop offset="60%" stop-color="#38bdf8"/><stop offset="100%" stop-color="#1e3a8a"/>
+      </radialGradient>
+    </defs>
+    <g>
+      <circle cx="32" cy="32" r="13" fill="url(#coreGrad)"/>
+      <ellipse cx="32" cy="32" rx="24" ry="9" fill="none" stroke="url(#ssGrad)" stroke-width="2.2" transform="rotate(-22 32 32)"/>
+      <g transform="rotate(-22 32 32)">
+        <circle cx="56" cy="32" r="3.4" fill="#e0f2fe"/>
+        <rect x="50.8" y="31.2" width="3.4" height="1.6" rx="0.8" fill="#7dd3fc"/>
+        <rect x="57.8" y="31.2" width="3.4" height="1.6" rx="0.8" fill="#7dd3fc"/>
+      </g>
+    </g>
+    <text x="66" y="36" font-family="Avenir Next, Futura, 'Segoe UI', Helvetica, sans-serif" font-size="19" font-weight="600" letter-spacing="3.5" fill="url(#ssGrad)">SPACESTATION</text>
+    <text x="66" y="52" font-family="Avenir Next, Futura, 'Segoe UI', Helvetica, sans-serif" font-size="10" font-weight="400" letter-spacing="4.2" fill="#94a3b8">.SI &#183; ORBITAL LEARNING</text>
+  </svg>
+</div>
+
+<div class="telemetry">
+  STARDATE <b id="t-date">—</b><br>
+  ALT <b id="t-alt">—</b> KM &nbsp;&middot;&nbsp; VEL <b id="t-vel">—</b> KM/S<br>
+  ORBIT <b id="t-orbit">—</b>&deg; &nbsp;&middot;&nbsp; SIGNAL <b>LOCKED</b><br>
+  MODE <b id="t-mode">PILOT</b>
+</div>
+
+<div class="readout">
+  LIFE SUPPORT <span class="bar"><i></i></span><br>
+  REACTOR CORE <span class="bar"><i class="b2"></i></span><br>
+  COMMS ARRAY <span class="bar"><i class="b3"></i></span>
+</div>
+
+<div class="radar">
+  <div class="sweep"></div>
+  <div class="blip" style="top:30%;left:62%"></div>
+  <div class="blip" style="top:64%;left:38%;animation-delay:-1.8s"></div>
+  <div class="blip" style="top:48%;left:22%;animation-delay:-3s"></div>
+</div>
+
+<div class="reticle">
+  <div class="r1"><div class="tick"></div></div>
+  <div class="r2"></div>
+  <div class="lbl">TARGET LOCK — KEPLER-442b<small>class-K orbit &middot; 1,206 ly &middot; survey active</small></div>
+</div>
+
+<!-- knowledge level selector -->
+<div class="levels" id="levels">
+  <div class="hdr">Crew Clearance</div>
+  <button class="lvl" data-lvl="cadet"><span class="nm">🧒 Cadet</span><span class="ag">young explorers · ages 6–12</span></button>
+  <button class="lvl active" data-lvl="pilot"><span class="nm">🧑‍🚀 Pilot</span><span class="ag">curious minds · teen &amp; adult</span></button>
+  <button class="lvl" data-lvl="engineer"><span class="nm">🛠 Engineer</span><span class="ag">university · working the math</span></button>
+  <button class="lvl" data-lvl="phd"><span class="nm">🌌 Astrophysicist</span><span class="ag">PhD+ · full derivations</span></button>
+</div>
+
+<div class="title" id="title">
+  <h1>SPACESTATION.SI</h1>
+  <p>Superintelligence Learning Instrument</p>
+</div>
+
+<div class="dock-hint">select a console</div>
+<div class="dock">
+  <button class="hex" onclick="openPanel('propulsion')"><span class="ic">🚀</span><span class="lb">Propulsion</span></button>
+  <button class="hex" onclick="openPanel('satellites')"><span class="ic">🛰️</span><span class="lb">Orbits</span></button>
+  <button class="hex" onclick="openPanel('exploration')"><span class="ic">🔭</span><span class="lb">Deep Space</span></button>
+  <button class="hex" onclick="openPanel('astro')"><span class="ic">🕳️</span><span class="lb">Astrophysics</span></button>
+  <button class="hex" onclick="openPanel('habitat')"><span class="ic">🧑‍🚀</span><span class="lb">Station Life</span></button>
+  <button class="hex" onclick="openPanel('solar')"><span class="ic">☀️</span><span class="lb">Solar Weather</span></button>
+  <button class="hex" onclick="openPanel('comms')"><span class="ic">📡</span><span class="lb">Comms</span></button>
+</div>
+
+<!-- holographic panel -->
+<div class="panel" id="panel">
+  <div class="p-head">
+    <h2 id="p-title">—</h2>
+    <span class="p-lvl" id="p-lvlbadge">PILOT</span>
+    <button class="p-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="p-body">
+    <div class="p-desc" id="p-desc"></div>
+    <div class="p-actions" id="p-actions"></div>
+    <div class="feed" id="p-feed"></div>
+  </div>
+  <div class="p-input">
+    <input id="p-q" type="text" placeholder="Transmit a question…" autocomplete="off">
+    <button onclick="sendFree()">Send</button>
+  </div>
+  <div class="demo-tag">auto link — live claude when the station backend is online, simulation otherwise</div>
+</div>
+
+<script>
+/* ================================================================
+   3D SCENE
+================================================================ */
+let mouseX = 0, mouseY = 0;
+try {
+  const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('space'), antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setSize(innerWidth, innerHeight);
+
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x01030c, 0.0011);
+  const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 3000);
+  camera.position.set(0, 6, 90);
+
+  /* lights (for station + moon) */
+  const sunLight = new THREE.DirectionalLight(0xfff4e0, 1.4);
+  sunLight.position.set(80, 60, 40);
+  scene.add(sunLight);
+  scene.add(new THREE.AmbientLight(0x223355, 0.9));
+
+  /* --- soft sprite texture (shared) --- */
+  function glowTexture(inner, outer){
+    const c = document.createElement('canvas'); c.width = c.height = 256;
+    const g = c.getContext('2d');
+    const grad = g.createRadialGradient(128,128,0,128,128,128);
+    grad.addColorStop(0, inner); grad.addColorStop(0.35, outer); grad.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = grad; g.fillRect(0,0,256,256);
+    const t = new THREE.CanvasTexture(c); return t;
+  }
+
+  /* --- nebulae --- */
+  const nebCols = [[0x4f46e5,'rgba(120,110,255,.55)'],[0x0e7490,'rgba(60,200,255,.5)'],[0x7e22ce,'rgba(190,110,255,.5)']];
+  for (let i = 0; i < 7; i++) {
+    const [tint, rgba] = nebCols[i % 3];
+    const sm = new THREE.SpriteMaterial({ map: glowTexture(rgba, 'rgba(20,20,60,.12)'),
+      color: tint, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false });
+    const sp = new THREE.Sprite(sm);
+    const a = (i / 7) * Math.PI * 2;
+    sp.position.set(Math.cos(a) * 500, 80 + Math.sin(i * 2.7) * 220, Math.sin(a) * 500 - 200);
+    sp.scale.setScalar(380 + (i % 3) * 140);
+    scene.add(sp);
+  }
+
+  /* --- sun glare --- */
+  const glare = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: glowTexture('rgba(255,250,230,1)', 'rgba(255,210,150,.35)'),
+    transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }));
+  glare.position.set(220, 160, -400); glare.scale.setScalar(260);
+  scene.add(glare);
+
+  /* --- star layers --- */
+  const starGroups = [];
+  for (let layer = 0; layer < 3; layer++) {
+    const n = 1300, pos = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      const r = 320 + layer * 260 + Math.random() * 200;
+      const th = Math.random() * Math.PI * 2, ph = Math.acos(2 * Math.random() - 1);
+      pos[i*3]   = r * Math.sin(ph) * Math.cos(th);
+      pos[i*3+1] = r * Math.sin(ph) * Math.sin(th);
+      pos[i*3+2] = r * Math.cos(ph);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const pts = new THREE.Points(g, new THREE.PointsMaterial({
+      color: [0xffffff, 0x9bd8ff, 0xc7b8ff][layer],
+      size: 1.6 - layer * 0.4, sizeAttenuation: false,
+      transparent: true, opacity: 0.9 - layer * 0.2 }));
+    scene.add(pts); starGroups.push(pts);
+  }
+
+  /* --- planet --- */
+  const planetMat = new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 } },
+    vertexShader: `
+      varying vec3 vN; varying vec3 vP;
+      void main(){ vN = normalize(normalMatrix * normal); vP = position;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+    fragmentShader: `
+      uniform float uTime; varying vec3 vN; varying vec3 vP;
+      float hash(vec3 p){ return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453); }
+      float noise(vec3 p){ vec3 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
+        return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),
+                       mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
+                   mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),
+                       mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z); }
+      void main(){
+        float bands = noise(vP*0.18 + vec3(uTime*0.02, 0.0, uTime*0.015));
+        bands += 0.5*noise(vP*0.45 - vec3(0.0,uTime*0.03,0.0));
+        bands += 0.25*noise(vP*1.1 + vec3(uTime*0.05));
+        vec3 deep  = vec3(0.02,0.06,0.18);
+        vec3 mid   = vec3(0.05,0.22,0.45);
+        vec3 storm = vec3(0.35,0.55,0.95);
+        vec3 col = mix(deep, mid, smoothstep(0.35,0.95,bands));
+        col = mix(col, storm, smoothstep(1.0,1.35,bands)*0.7);
+        /* night-side city shimmer */
+        float city = step(0.985, hash(floor(vP*2.2))) * (0.5+0.5*sin(uTime*2.0+vP.x*7.0));
+        col += vec3(1.0,0.8,0.45) * city * 0.35;
+        float fres = pow(1.0 - abs(dot(vN, vec3(0.0,0.0,1.0))), 2.5);
+        col += vec3(0.25,0.65,1.0) * fres * 0.95;
+        gl_FragColor = vec4(col, 1.0);
+      }`
+  });
+  const planet = new THREE.Mesh(new THREE.SphereGeometry(26, 96, 96), planetMat);
+  planet.position.set(0, -26, 0);
+  scene.add(planet);
+
+  /* --- atmosphere --- */
+  const atmo = new THREE.Mesh(
+    new THREE.SphereGeometry(28.6, 64, 64),
+    new THREE.ShaderMaterial({
+      side: THREE.BackSide, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+      vertexShader: `varying vec3 vN;
+        void main(){ vN = normalize(normalMatrix * normal);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+      fragmentShader: `varying vec3 vN;
+        void main(){ float i = pow(0.62 - dot(vN, vec3(0,0,-1.0)), 3.0);
+          gl_FragColor = vec4(0.3, 0.75, 1.0, 1.0) * i * 1.7; }`
+    })
+  );
+  atmo.position.copy(planet.position); scene.add(atmo);
+
+  /* --- holo wireframe --- */
+  const holo = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(30.5, 2),
+    new THREE.MeshBasicMaterial({ color: 0x6ee7ff, wireframe: true, transparent: true, opacity: 0.05 }));
+  holo.position.copy(planet.position); scene.add(holo);
+
+  /* --- debris ring --- */
+  const rn = 1100, rpos = new Float32Array(rn * 3);
+  for (let i = 0; i < rn; i++) {
+    const a = Math.random() * Math.PI * 2, rad = 38 + Math.random() * 10;
+    rpos[i*3] = Math.cos(a) * rad; rpos[i*3+1] = (Math.random() - 0.5) * 2.2; rpos[i*3+2] = Math.sin(a) * rad;
+  }
+  const rg = new THREE.BufferGeometry();
+  rg.setAttribute('position', new THREE.BufferAttribute(rpos, 3));
+  const ring = new THREE.Points(rg, new THREE.PointsMaterial({
+    color: 0x9bd8ff, size: 1.3, sizeAttenuation: false, transparent: true, opacity: 0.7 }));
+  ring.position.copy(planet.position); ring.rotation.x = 0.42; scene.add(ring);
+
+  /* --- moon --- */
+  const moon = new THREE.Mesh(new THREE.SphereGeometry(4.5, 48, 48),
+    new THREE.MeshStandardMaterial({ color: 0x8f97a8, roughness: 0.95, metalness: 0.0 }));
+  scene.add(moon);
+
+  /* --- space station model --- */
+  const station = new THREE.Group();
+  const hullMat  = new THREE.MeshStandardMaterial({ color: 0xc4d2ea, metalness: 0.85, roughness: 0.3 });
+  const panelMat = new THREE.MeshStandardMaterial({ color: 0x1d3fae, metalness: 0.6, roughness: 0.25,
+    emissive: 0x0a1e66, emissiveIntensity: 0.7 });
+  const truss = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 9, 12), hullMat);
+  truss.rotation.z = Math.PI / 2; station.add(truss);
+  const hub = new THREE.Mesh(new THREE.SphereGeometry(1.1, 24, 24), hullMat); station.add(hub);
+  [-1, 1].forEach(s => {
+    const mod = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 2.4, 16), hullMat);
+    mod.rotation.z = Math.PI / 2; mod.position.x = s * 2.6; station.add(mod);
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.1, 5.6), panelMat);
+    wing.position.x = s * 4.9; station.add(wing);
+  });
+  const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8),
+    new THREE.MeshBasicMaterial({ color: 0xff4466 }));
+  beacon.position.y = 1.35; station.add(beacon);
+  station.scale.setScalar(0.9);
+  scene.add(station);
+
+  /* --- comets --- */
+  const comets = [];
+  for (let i = 0; i < 3; i++) {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+    const line = new THREE.Line(geo, new THREE.LineBasicMaterial({
+      color: 0xbfefff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending }));
+    scene.add(line);
+    comets.push({ line, pos: new THREE.Vector3(), vel: new THREE.Vector3(), life: -Math.random() * 8 });
+  }
+  function resetComet(c){
+    c.pos.set((Math.random() - 0.5) * 500, 150 + Math.random() * 150, -300 - Math.random() * 200);
+    c.vel.set(-(1.5 + Math.random() * 2.5), -(1 + Math.random() * 1.8), 0.6);
+    c.life = 4 + Math.random() * 3;
+  }
+
+  addEventListener('mousemove', e => {
+    mouseX = (e.clientX / innerWidth - 0.5) * 2;
+    mouseY = (e.clientY / innerHeight - 0.5) * 2;
+  });
+  addEventListener('resize', () => {
+    camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+  });
+
+  const clock = new THREE.Clock();
+  (function animate(){
+    requestAnimationFrame(animate);
+    const t = clock.getElapsedTime(), dt = Math.min(clock.getDelta ? 0.016 : 0.016, 0.05);
+    planetMat.uniforms.uTime.value = t;
+    planet.rotation.y = t * 0.04;
+    holo.rotation.y = -t * 0.06; holo.rotation.x = Math.sin(t * 0.1) * 0.1;
+    ring.rotation.y = t * 0.09;
+    starGroups.forEach((s, i) => { s.rotation.y = t * 0.004 * (i + 1); });
+
+    /* moon orbit */
+    const ma = t * 0.05 + 2.1;
+    moon.position.set(Math.cos(ma) * 120, -10 + Math.sin(ma * 0.7) * 14, -80 + Math.sin(ma) * 60);
+    moon.rotation.y = t * 0.02;
+
+    /* station orbit */
+    const sa = t * 0.12;
+    station.position.set(Math.cos(sa) * 47, -26 + Math.sin(sa) * 18, Math.sin(sa) * 40);
+    station.rotation.y = t * 0.25; station.rotation.z = Math.sin(t * 0.3) * 0.15;
+    beacon.material.color.setHex(Math.sin(t * 6) > 0 ? 0xff4466 : 0x661122);
+
+    /* comets */
+    for (const c of comets) {
+      c.life -= 0.016;
+      if (c.life <= 0 && c.life > -0.02) resetComet(c);
+      else if (c.life < -6) resetComet(c);
+      if (c.life > 0) {
+        c.pos.addScaledVector(c.vel, 1);
+        const p = c.line.geometry.attributes.position.array;
+        p[0] = c.pos.x; p[1] = c.pos.y; p[2] = c.pos.z;
+        p[3] = c.pos.x - c.vel.x * 14; p[4] = c.pos.y - c.vel.y * 14; p[5] = c.pos.z - c.vel.z * 14;
+        c.line.geometry.attributes.position.needsUpdate = true;
+        c.line.material.opacity = Math.min(1, c.life) * 0.8;
+      } else c.line.material.opacity = 0;
+    }
+
+    camera.position.x += ((mouseX * 7 + Math.sin(t * 0.11) * 3) - camera.position.x) * 0.03;
+    camera.position.y += ((6 - mouseY * 4 + Math.cos(t * 0.09) * 2) - camera.position.y) * 0.03;
+    camera.lookAt(0, -8, 0);
+    renderer.render(scene, camera);
+  })();
+} catch (e) {
+  document.getElementById('space').style.background =
+    'radial-gradient(ellipse at 50% 120%, #0b2a55 0%, #01030c 60%)';
+}
+
+/* ================================================================
+   BOOT
+================================================================ */
+const bootLines = ['linking star trackers…','spinning up reactor…','loading knowledge cores…','calibrating hud…','signal locked'];
+(function boot(i){
+  const el = document.getElementById('bootlog'), bar = document.getElementById('bootbar');
+  if (i < bootLines.length) {
+    el.textContent = bootLines[i];
+    bar.style.width = Math.round(((i + 1) / bootLines.length) * 100) + '%';
+    setTimeout(() => boot(i + 1), 420);
+  } else document.getElementById('boot').classList.add('done');
+})(0);
+
+/* ================================================================
+   TELEMETRY
+================================================================ */
+let orbitDeg = 12.4;
+setInterval(() => {
+  const d = new Date();
+  document.getElementById('t-date').textContent =
+    d.getFullYear() + '.' + String(d.getMonth()+1).padStart(2,'0') + '.' + String(d.getDate()).padStart(2,'0') +
+    ' ' + d.toTimeString().slice(0,8);
+  document.getElementById('t-alt').textContent = (408 + Math.sin(Date.now()/9000) * 2.7).toFixed(1);
+  document.getElementById('t-vel').textContent = (7.66 + Math.sin(Date.now()/6000) * 0.013).toFixed(3);
+  orbitDeg = (orbitDeg + 0.021) % 360;
+  document.getElementById('t-orbit').textContent = orbitDeg.toFixed(1);
+}, 120);
+
+/* ================================================================
+   KNOWLEDGE LEVELS
+================================================================ */
+const LEVELS = {
+  cadet:    { name: 'Cadet',          voice: 'Explain like a brilliant, playful teacher for a curious 8–12 year old. Short sentences, vivid pictures, zero jargon without explanation, lots of wonder. Never talk down.' },
+  pilot:    { name: 'Pilot',          voice: 'Explain for a smart, curious adult with no physics background. Popular-science depth: real numbers, vivid analogies, no unexplained equations.' },
+  engineer: { name: 'Engineer',       voice: 'Explain for a STEM undergraduate. Use the governing equations, worked numbers, and engineering trade-offs. Assume calculus and intro mechanics.' },
+  phd:      { name: 'Astrophysicist', voice: 'Explain at research level for a PhD physicist. Full derivations, scaling laws, current literature debates, error budgets, open problems. Do not simplify.' }
+};
+let currentLevel = 'pilot';
+
+document.querySelectorAll('.lvl').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.lvl').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  currentLevel = b.dataset.lvl;
+  document.getElementById('t-mode').textContent = LEVELS[currentLevel].name.toUpperCase();
+  document.getElementById('p-lvlbadge').textContent = LEVELS[currentLevel].name.toUpperCase();
+  if (document.getElementById('panel').classList.contains('open') && currentDomain)
+    addMsg('ai', 'Clearance updated to ' + LEVELS[currentLevel].name.toUpperCase() + '. All briefings now calibrated to this level.', true);
+}));
+
+/* ================================================================
+   ANTHROPIC API LAYER
+   DEMO_MODE=true → simulated. To go live: backend proxy holds your
+   key; pass {prompt, level} and build the system prompt server-side
+   as SYSTEM_PROMPT + LEVELS[level].voice. Then set DEMO_MODE=false.
+================================================================ */
+/* 'auto' = try the live backend, fall back to simulation if unreachable.
+   true = always simulate. false = live only (errors surface). */
+const DEMO_MODE = 'auto';
+const API_ENDPOINT = '/api/chat';
+
+/* Convert internal button sentinels into natural prompts for live Claude */
+const LIVE_ACTION_PROMPTS = {
+  explain: 'Give a deep-dive explanation of the core ideas of',
+  quiz: 'Create a 3-question quiz (no answers yet — offer to grade my replies) about',
+  fact: 'Share one striking, lesser-known insight about'
+};
+function toLivePrompt(prompt){
+  const m = prompt.match(/^__(\w+)__(\w+)__$/);
+  if (!m) return prompt;
+  return LIVE_ACTION_PROMPTS[m[2]] + ' ' + PANELS[m[1]].title + ': ' + PANELS[m[1]].desc;
+}
+
+async function callAnthropic(prompt){
+  if (DEMO_MODE === true) return demoResponse(prompt);
+  try {
+    const r = await fetch(API_ENDPOINT, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ prompt: toLivePrompt(prompt), level: currentLevel })
+    });
+    if (!r.ok) throw new Error('uplink failed (' + r.status + ')');
+    const d = await r.json();
+    return d.content?.[0]?.text ?? d.reply ?? '[no response payload]';
+  } catch (e) {
+    if (DEMO_MODE === 'auto') return demoResponse(prompt);
+    throw e;
+  }
+}
+
+/* ================================================================
+   KNOWLEDGE CORES — DEMO[domain][action][level]
+================================================================ */
+const DEMO = {
+propulsion: {
+explain: {
+cadet: "Imagine you're standing on a skateboard holding a heavy backpack. Throw the backpack forward — you roll backward! That's exactly how a rocket works. It throws hot gas out of its engines super fast, and the push sends the rocket the other way. There's no air in space to push against — the rocket pushes against its own exhaust.\n\nThe tricky part: to go faster, you need more fuel. But more fuel makes the rocket heavier, which needs even MORE fuel. That's why rockets are almost all fuel tank!\n\nScientists are building smarter engines. Ion engines push out tiny glowing particles — the push is as gentle as a piece of paper resting on your hand, but it never stops, and after a year the ship is going incredibly fast. And one wild idea, Breakthrough Starshot, would leave the engine at home: a giant laser on Earth pushes a spacecraft the size of a stamp on a sail thinner than a soap bubble — up to one-fifth the speed of light!",
+pilot: "Every rocket fights the same tyrant: the rocket equation. Your speed change depends on exhaust velocity times the logarithm of your fuel fraction — which means fuel needs grow exponentially. Chemical engines top out near 4.5 km/s exhaust velocity, so reaching Mars is hard and reaching stars is hopeless with chemistry alone.\n\nThe escape routes: Nuclear thermal rockets heat hydrogen over a reactor core, roughly doubling efficiency. Ion drives are 10–20× more efficient still — NASA's Dawn probe thrust with the force of a sheet of paper on your palm, yet built up 11 km/s of speed over years of patient pushing. Fusion drives could open the outer solar system to human crews.\n\nAnd for the stars? Breakthrough Starshot proposes leaving the engine on Earth: a 100-gigawatt laser array pushing gram-scale light sails to 20% of light speed — Proxima Centauri in ~20 years instead of 60,000.",
+engineer: "Start from Tsiolkovsky: Δv = Isp·g₀·ln(m₀/m₁). The log is the killer — for chemical Isp ≈ 450 s (vₑ ≈ 4.4 km/s), a 9 km/s LEO insertion demands mass ratio ≈ 7.7, and staging exists purely to shed dead tank mass and reset the logarithm.\n\nNuclear thermal (NERVA-class): reactor heats H₂ to ~2,700 K; low molecular mass (2 g/mol vs ~18 for H₂O exhaust) gives Isp ≈ 900 s. Thrust-to-weight ~3–7, so it still lifts nothing but excels in-space.\n\nElectric propulsion decouples energy from propellant: Hall thrusters run Isp 1,500–3,000 s, gridded ion to 10,000 s. The catch is power-limited acceleration: thrust F = 2ηP/vₑ, so for fixed power, higher Isp means LESS thrust. Optimal Isp exists for every mission — burn time competes with propellant mass (Stuhlinger's analysis). Trade study essentials: α (kg/kW of the power system) sets the achievable characteristic velocity; solar arrays fade as 1/r²; nuclear-electric wins beyond Jupiter.",
+phd: "The full problem is power-limited relativistic transport. Nonrelativistic optimum first: for power-limited systems, minimizing propellant for fixed thrust time T gives the Stuhlinger characteristic velocity v_ch = √(2ηT/α), α being specific mass of the power plant [kg/W]; optimal exhaust velocity sits near v_ch, and mission Δv beyond ~2v_ch is inaccessible regardless of Isp — the power plant, not the propellant, is the binding constraint. Current α for space nuclear-electric concepts: ~20–30 kg/kW (Kilopower-derived) vs the ~1 kg/kW needed for fast crewed Mars transits.\n\nRelativistically, Δv/c = tanh[(vₑ/c)·ln(m₀/m₁)] — even antimatter photon rockets (vₑ = c) need mass ratio ~3.5 per 0.6c leg, and the interstellar erosion problem (grain impacts at 0.2c deposit ~kJ/mg) remains unsolved for anything with cross-section.\n\nBeamed propulsion evades the rocket equation: Starshot's phased array must hold diffraction-limited spot (θ ≈ 1.22λ/D) on a ~4 m sail over ~2 million km of acceleration — demanding ~km-scale effective aperture at λ ≈ 1 μm, atmospheric phase correction across ~10⁸ emitters, and sail reflectivity >99.995% to survive ~10 GW/m². Open problems: beam-riding stability (sail shape must be passively self-centering — conical/spinning solutions), and deceleration at target, for which magsail drag against the ISM (Zubrin) or photon braking via Alpha Cen A's luminosity (Heller & Hippke) trade centuries against complexity."
+},
+quiz: {
+cadet: "Cadet quiz! 🚀\n\n1) When a rocket pushes gas DOWN, which way does the rocket go?\n\n2) Why do rockets need to carry so much fuel?\n\n3) The Starshot idea uses a laser to push a tiny spaceship. Where does the laser stay — on the ship, or on Earth?\n\nType your answers and I'll check them!",
+pilot: "Quiz — propulsion:\n\n1) Why does doubling your desired speed change require far MORE than double the fuel?\n\n2) An ion engine's thrust is about the weight of a sheet of paper. Why can it still take a probe across the solar system?\n\n3) What does Breakthrough Starshot leave behind on Earth, and why does that help so much?\n\nTransmit answers for grading.",
+engineer: "Quiz — engineering track:\n\n1) Compute the mass ratio required for Δv = 8 km/s with vₑ = 4 km/s. Then explain why two stages beat one for the same total.\n\n2) A 10 kW Hall thruster runs at Isp = 2,000 s with η = 0.55. Estimate its thrust. What happens to thrust if you double Isp at fixed power?\n\n3) Why does nuclear thermal get ~2× chemical Isp despite similar chamber temperatures? (Hint: exhaust molecular mass.)\n\nShow your work — I'll check the numbers.",
+phd: "Quiz — research track:\n\n1) Derive the Stuhlinger optimal exhaust velocity for a power-limited mission of burn time T and power-plant specific mass α. Show why Δv ≳ 2√(2ηT/α) is effectively unreachable.\n\n2) For a 0.2c beam-riding sail: estimate the required aperture for a 1 μm laser to maintain spot on a 4 m sail at 2×10⁹ m, and the sail's equilibrium temperature at 10 GW/m² with absorptivity 10⁻⁵ and emissivity 0.5 both sides.\n\n3) A relativistic rocket with vₑ = 0.03c (D-He³ fusion, optimistic) targets cruise at 0.1c. Mass ratio? Comment on the tyranny's persistence.\n\nSubmit derivations — partial credit for clean scaling arguments."
+},
+fact: {
+cadet: "The fastest thing humans ever built is the Parker Solar Probe — it goes about 190 kilometers every SECOND when it swings close to the Sun. That's like flying from New York to Los Angeles in 20 seconds! But space is so big that even at that speed, reaching the nearest star would still take over 6,000 years. That's why scientists are dreaming up laser sails and fusion engines — to shrink thousands of years into decades.",
+pilot: "The Parker Solar Probe is the fastest human-made object — about 191 km/s at closest solar approach. Yet even at that speed, the 4.24 light-years to Proxima Centauri would take roughly 6,600 years. That gap between our best machine and the nearest star is the clearest argument that propulsion physics, not astronomy, is the bottleneck of the interstellar age.",
+engineer: "Parker Solar Probe's 191 km/s record isn't from its engines — it's almost entirely gravitational: seven Venus flybys walked its perihelion down to 6.9 million km, where the Sun's potential well does the work. Its actual Δv budget is modest. Lesson: in mission design, gravity assists are 'free' Δv, and the Oberth effect — burning deep in a gravity well where kinetic energy gain per unit propellant is maximized — can multiply a small burn's effect several-fold. A solar Oberth maneuver at ~10 R☉ is still the leading near-term concept for a 500+ AU interstellar-precursor mission.",
+phd: "The solar Oberth maneuver deserves more scrutiny than it gets: a burn Δv at perihelion r_p yields hyperbolic excess v_∞ ≈ √(Δv² + 2Δv·v_p) where v_p = √(2GM☉/r_p) ≈ 437 km/s at 3 R☉ — so a 2 km/s burn buys ~42 km/s of v_∞. The engineering caveat kills much of the romance: thermal loads at 3 R☉ exceed 2 MW/m², demanding a sacrificial shield whose mass ratio erodes the gained Δv, and recent JPL trade studies (Interstellar Probe, 2019–21) concluded a conventional Jupiter Oberth with SLS-class injection achieves comparable v_∞ (~7–8 AU/yr) at far lower risk. The maneuver's real niche may be statite-released sundiver sails, where the 'burn' is photon pressure and shield mass IS the sail."
+}
+},
+satellites: {
+explain: {
+cadet: "Here's a secret: satellites are always falling! Throw a ball and it curves down to the ground. Throw it faster, it lands farther away. Now imagine throwing it SO fast — about 8 kilometers every second — that as it falls, the Earth curves away underneath it. It keeps falling forever and never lands. That's an orbit!\n\nAstronauts on the space station float not because there's no gravity — gravity up there is almost as strong as on the ground — but because they're falling around the Earth together with their ship, like being inside a giant endless rollercoaster drop.\n\nSatellites do amazing jobs: some take pictures of storms, some carry your TV shows and video calls, and a team of them (GPS) tells your family's car exactly where it is. Higher satellites circle slowly; there's even a special height where a satellite circles at exactly Earth's spinning speed, so it seems to hover over one spot forever!",
+pilot: "An orbit is a fall that never lands. At 400 km up, a satellite moves at 7.67 km/s — fast enough that Earth's surface curves away exactly as fast as gravity pulls it down. Astronauts float because they're falling WITH their ship, not because gravity is gone (it's 89% of surface strength up there).\n\nAltitude is destiny. Low orbits: close, fast, cheap to reach — but each satellite sees only a small patch, which is why Starlink needs thousands. Geostationary orbit at 35,786 km: one special altitude where orbital period equals Earth's rotation, so the satellite hovers over one longitude — perfect for TV and weather, but signals take a quarter-second round trip. And 1.5 million km out, at Lagrange point L2, gravity from Earth and Sun balance so precisely that JWST can park there with sips of fuel.\n\nThe hidden marvel: GPS satellites' clocks run 38 microseconds fast per day due to Einstein's relativity — uncorrected, your blue dot would drift 10 km daily.",
+engineer: "Two equations run this deck. Vis-viva: v² = GM(2/r − 1/a) — total energy fixes the semi-major axis, and every maneuver is bookkeeping between kinetic and potential terms. Kepler's third: T² = 4π²a³/GM.\n\nHohmann transfer LEO→GEO: burn 1 raises apogee (Δv₁ ≈ 2.42 km/s from 400 km), burn 2 circularizes at 35,786 km (Δv₂ ≈ 1.47 km/s). Counterintuitive consequence: to catch a target AHEAD of you in the same orbit, you burn RETROGRADE — dropping to a lower, faster phasing orbit.\n\nEarth's oblateness (J₂ = 1.08×10⁻³) makes real orbits precess: nodal regression Ω̇ ∝ −cos(i)/a³·⁵. Engineers exploit it — pick i ≈ 98° and the orbit plane precesses exactly 360°/year, keeping constant sun angle: the sun-synchronous orbit every imaging satellite uses.\n\nStation-keeping budgets: GEO needs ~50 m/s/yr (mostly north-south, lunisolar perturbations); LEO fights drag with density scaling as ~e^(−h/H), H ≈ 60 km. Below ~300 km, lifetime is months.",
+phd: "Beyond the Keplerian scaffold, the interesting dynamics live in perturbation theory and the three-body problem. J₂ secular rates: Ω̇ = −(3/2)nJ₂(R_E/p)²cos i, ω̇ = (3/4)nJ₂(R_E/p)²(5cos²i−1) — the latter vanishing at i = 63.4° (critical inclination) is why Molniya orbits freeze their apsides. Frozen-orbit design sets ė = ω̇ = 0 using J₂/J₃ balance; sun-synchronous + frozen + repeat-ground-track constraints define a discrete solution lattice from which virtually all Earth-observation orbits are drawn.\n\nIn the CR3BP, the collinear points L1/L2 are saddle×center×center; the center manifold hosts halo/Lissajous families, and their stable/unstable manifolds — asymptotic tubes — form the Interplanetary Transport Network enabling near-zero-Δv transfers at the cost of time (Koon, Lo, Marsden, Ross formalism). JWST rides a quasi-halo with ~2–4 m/s/yr of station-keeping, always burning toward the unstable direction, never across it (no braking burns available — L2 halos are controllable only along the escape manifold).\n\nActive research: conjunction-assessment statistics under covariance realism (the 'probability dilution' problem — low reported Pc from inflated covariance is NOT safety), autonomous constellation traffic management at Starlink scale, and low-thrust trajectory optimization via indirect methods (costate continuation) vs. convexification (successive convex programming now flight-proven).",
+},
+quiz: {
+cadet: "Orbit quiz! 🛰️\n\n1) Astronauts float on the space station. Is it because gravity is turned off up there? (Careful — trick question!)\n\n2) If you could throw a ball at 8 km per second, what would happen to it?\n\n3) Some satellites seem to hover over one spot on Earth forever. Are they stopped, or moving?\n\nSend me your answers!",
+pilot: "Quiz — orbits:\n\n1) The ISS is at 400 km, where gravity is 89% of surface strength. Why do astronauts float?\n\n2) Why does Starlink need thousands of satellites when one GEO satellite can see a whole hemisphere?\n\n3) Your GPS clock runs 38 μs/day fast. Which two effects of Einstein's compete to produce that number, and which wins?\n\nTransmit answers for grading.",
+engineer: "Quiz — engineering track:\n\n1) Using vis-viva, compute circular velocity at 400 km (μ = 398,600 km³/s², R_E = 6,371 km). Then: you burn prograde 100 m/s. Find the new apogee.\n\n2) Why does a satellite trying to catch a leader in the same orbit burn retrograde? Walk the energy logic.\n\n3) Derive why sun-synchronous orbits need i > 90°. What does J₂'s sign have to do with it?\n\nShow work — numbers matter here.",
+phd: "Quiz — research track:\n\n1) Starting from the Lagrange planetary equations, derive the J₂ secular rate for Ω and show the critical inclination i = 63.43° emerges from dω/dt = 0.\n\n2) In the CR3BP with μ = 3.04×10⁻⁶ (Sun–Earth), estimate the in-plane eigenvalue of the L2 linearization and hence station-keeping cadence for an unstable halo with time constant ~23 days.\n\n3) Two objects, combined covariance 1σ = 200 m radial, miss distance 500 m, hard-body radius 10 m: sketch the Pc integral and explain probability dilution — why inflating covariance can DECREASE computed collision probability while increasing true risk.\n\nDerivations, please."
+},
+fact: {
+cadet: "The space station is as big as a football field and flies around the whole Earth in just 90 minutes — astronauts see 16 sunrises and 16 sunsets every single day! When it passes over your house at night, you can actually see it: it looks like a bright star sliding slowly across the sky. It's the third-brightest thing up there after the Sun and Moon!",
+pilot: "GPS satellites experience time differently than you: special relativity slows their clocks ~7 μs/day (they're moving fast), while general relativity speeds them up ~45 μs/day (gravity is weaker at 20,200 km). Net: +38 μs/day. Uncorrected, your position would drift ~10 km per day. Your phone's blue dot is a daily working proof of Einstein.",
+engineer: "The 2009 Iridium-33/Cosmos-2251 collision (11.7 km/s closing velocity) created ~2,300 tracked fragments and seeded the modern conjunction-assessment era. Kinetic energy scaling explains the fear: at orbital velocity, a 1 kg fragment carries ~25× the energy of a 1 kg TNT charge. Kessler's insight was that debris-on-debris collisions can dominate: above a critical density, fragment generation outpaces atmospheric decay and the cascade self-sustains. LEO between 700–1,000 km — too high for meaningful drag cleanup on decade timescales — is the regime designers now actively avoid or plan active deorbit for.",
+phd: "LAGEOS — a 400 kg brass sphere with 426 corner-cube retroreflectors, no electronics — may be the highest scientific-return-per-complexity satellite ever flown. Laser ranging to it measures: frame-dragging (Lense–Thirring precession, ~31 mas/yr, confirmed to ~10% with LAGEOS+LARES by modeling Earth's gravity field to degree/order 60+ from GRACE), Earth's GM to 9 significant figures, secular J̇₂ (now sign-flipping due to post-glacial rebound vs. ice-mass loss competition), and the 13 cm/yr semi-major-axis decay whose explanation required invoking thermal thrust (Yarkovsky–Schach effect) from anisotropic re-radiation — the same physics that dominates asteroid orbital evolution. Its orbit is stable enough that it carries a plaque for retrieval in 8.4 million years."
+}
+},
+exploration: {
+explain: {
+cadet: "Right now, two robot explorers called Voyager 1 and 2 are farther from home than anything humans ever built. They launched in 1977 — before your parents might have been born! — and they're STILL sending messages home. Their radios are weaker than a nightlight, but our giant dish antennas can hear their whisper from 24 billion kilometers away. Each carries a golden record with Earth's sounds — music, laughter, whale songs — in case anyone ever finds them.\n\nCloser to home, we're hunting for alien oceans. Jupiter's moon Europa looks like a cracked ice ball, but under that ice hides a warm, dark ocean with MORE water than all Earth's oceans combined. A spaceship called Europa Clipper is flying there right now to sniff its water jets.\n\nAnd our big space telescopes can smell the air of planets around other stars — when a planet crosses its star, a rainbow fingerprint of its sky reaches us. If we ever find oxygen in one... that might mean something is breathing there.",
+pilot: "Voyager 1, launched 1977, crossed the heliopause in 2012 and now reports from interstellar space at ~24.5 billion km — its 23-watt transmitter arriving billions of times fainter than a watch battery, still decoded daily by 70-meter dishes.\n\nThe modern strategy has three layers. Sample return: bringing pieces of asteroids (and soon Mars) to Earth labs, because a lab beats any robot instrument. Ocean worlds: Europa and Enceladus hide subsurface oceans holding more liquid water than Earth; Europa Clipper arrives in 2030 and may fly through plumes venting that ocean directly into space. Telescopes: JWST reads exoplanet atmospheres by watching starlight filter through them during transits — a chemical fingerprint from light-years away.\n\nThe endgame is a biosignature: oxygen and methane found together, gases that destroy each other unless something keeps replenishing both. The question has quietly shifted from 'what's out there?' to 'is chemistry alone enough to make it alive?'",
+engineer: "Deep space is an engineering problem in four brutal budgets.\n\nLink budget: received power falls as 1/r². Voyager's 23 W across 24.5 billion km arrives at ~10⁻¹⁸ W. Recovery requires 70 m apertures, 4 K-cooled amplifiers, and channel codes within ~1 dB of the Shannon limit — data rate has fallen from 115 kbps at Jupiter to 160 bps today.\n\nPower budget: solar flux at Saturn is 1% of Earth's. Beyond ~5 AU you fly RTGs: Pu-238, 87.7-year half-life, ~5.5% thermoelectric efficiency, degrading ~1.9%/year — every mission's clock.\n\nΔv budget: chemical stages can't reach the outer planets directly; gravity assists are mandatory (Voyager's Grand Tour exploited a 175-year planetary alignment).\n\nDetection budget: transmission spectroscopy signal scales as 2R_p·h/R_★², where h = kT/μg is the atmospheric scale height — why puffy hot planets around SMALL stars (TRAPPIST-1) are the accessible targets, and why an Earth-twin around a Sun-twin (signal ~10⁻⁷) needs the next generation of instruments.",
+phd: "Three frontier problems define the field.\n\nSpectral retrieval: transit spectra are diffraction-limited to tens of ppm; retrievals over (T(p), composition, clouds/hazes) are degenerate — patchy high clouds mimic high mean molecular weight, and unocculted starspots imprint a 'transit light source effect' that can forge or mask water features (a live issue for every TRAPPIST-1 JWST result). Bayesian frameworks (nested sampling over 15–30 parameter atmospheres) now dominate, but model discrepancy — not photon noise — is the error budget's floor.\n\nDirect imaging: an Earth-twin at 10 pc sits at contrast 10⁻¹⁰ at ~100 mas. Coronagraphy must suppress diffraction AND scattered light; wavefront must hold to ~10 pm RMS over hours. HWO's architecture trade (monolith vs. segmented, coronagraph vs. starshade) hinges on whether segment-gap diffraction can be controlled at the 10⁻¹¹ level.\n\nBiosignature epistemology: O₂+CH₄ disequilibrium is necessary but not sufficient — abiotic O₂ pathways (H₂O photolysis + H escape on M-dwarf planets, CO₂ photolysis without surface sinks) demand contextual falsification: measure the WHOLE system (CO as photolysis tracer, N₂ via dimer features, surface pressure). The emerging consensus frames detection as Bayesian model comparison against exhaustive abiotic hypotheses — a single-molecule 'eureka' is not on the table.\n\nAnd at 550 AU, the Sun's gravitational lens offers ~10¹¹ amplification — a mission there could image an exoplanet's continents. Getting there in a career-length time needs the propulsion deck's sundiver sails. Everything connects.",
+},
+quiz: {
+cadet: "Explorer quiz! 🔭\n\n1) The Voyager robots have been flying since 1977. Are they still talking to us?\n\n2) Europa looks like an ice ball. What's hiding UNDER the ice?\n\n3) What do the Voyagers carry in case aliens ever find them?\n\nSend your answers, explorer!",
+pilot: "Quiz — deep space:\n\n1) What boundary did Voyager 1 cross in 2012, and what pushes back against the Sun's wind there?\n\n2) How can a telescope read the atmosphere of a planet it can't even see as a dot? What event makes it possible?\n\n3) Why are oxygen AND methane together a stronger sign of life than lots of oxygen alone?\n\nTransmit answers for grading.",
+engineer: "Quiz — engineering track:\n\n1) Voyager transmits 23 W from 24.5×10⁹ km. Compute the flux at Earth (W/m²) and explain why data rate scales roughly as 1/r².\n\n2) An RTG launches with 4,700 W thermal. Using Pu-238's 87.7-yr half-life and 1.9%/yr system degradation, estimate electrical power at year 40 (η = 5.5% initial).\n\n3) Transmission signal ∝ 2R_p·h/R_★². Compute the ratio of signal for an Earth-analog around TRAPPIST-1 (R_★ = 0.12 R☉) vs. the Sun. Why did we look there first?\n\nNumbers, please.",
+phd: "Quiz — research track:\n\n1) Derive the transit light source effect: show how unocculted spots of covering fraction f and temperature contrast ΔT imprint an apparent transmission feature, and estimate its magnitude for f = 0.05, T_★ = 2,600 K, ΔT = 300 K at 1.4 μm (water band).\n\n2) For a 6 m off-axis coronagraphic telescope, translate a 10⁻¹⁰ raw-contrast requirement at 4 λ/D into an RMS wavefront stability requirement, and defend the ~10 pm number.\n\n3) Construct the abiotic-O₂ falsification test suite for an M-dwarf terrestrial: which molecular tracers discriminate photolytic O₂ from biogenic, and what does each non-detection buy you in the Bayesian odds ratio?\n\nFull arguments expected."
+},
+fact: {
+cadet: "Saturn's tiny moon Enceladus shoots geysers of ocean water out of cracks near its south pole — straight into space! The water comes from a warm, salty ocean under the ice. A spacecraft called Cassini actually FLEW THROUGH the spray and tasted it: salt, ice, and the same kind of chemistry that feeds deep-sea life on Earth. Somewhere under that ice, right now, there might be something swimming.",
+pilot: "Europa's subsurface ocean likely holds roughly twice the liquid water of all Earth's oceans — kept warm not by sunlight but by tidal flexing as Jupiter kneads the moon like dough. Europa Clipper (arriving 2030) may fly through plumes venting that ocean into space, letting us taste an alien sea without drilling a single meter of ice.",
+engineer: "Cassini's final instrument readings settled Enceladus's habitability case on thermodynamic grounds: the INMS detected H₂ in the plume at ~0.4–1.4% — molecular hydrogen in an ocean means active water-rock reactions (serpentinization) and a usable redox gradient. The free energy of methanogenesis (4H₂ + CO₂ → CH₄ + 2H₂O) computes to tens of kJ/mol available — comparable to terrestrial hydrothermal vent ecosystems. We didn't find life; we found the food supply, quantified in joules.",
+phd: "The most information-dense object leaving the solar system may be the Voyager plasma wave data from the heliopause crossings: both spacecraft measured electron plasma oscillations giving n_e jumping from ~0.002 to ~0.1 cm⁻³ — but the boundary was NOT where pre-2012 models placed it, and both crossings showed magnetic field direction continuity across the heliopause (the 'rotation problem'), still unexplained: the interstellar field appears to drape and align with the heliospheric field at the boundary, defying simple pressure-balance MHD. Add IBEX's energetic-neutral-atom 'ribbon' (a secondary-ENA signature organized by the local interstellar B-field) and the emerging picture is a heliosphere shaped less like a comet-tail and more like a croissant (Opher et al.) — a debate a dedicated Interstellar Probe mission with a properly instrumented payload would settle."
+}
+},
+astro: {
+explain: {
+cadet: "Stars are giant balls of glowing gas, and they have life stories! They're born inside huge clouds of dust, they shine for millions or billions of years by squeezing tiny atoms together in their hot hearts, and when the biggest ones run out of fuel — BOOM — they explode brighter than a whole galaxy.\n\nWhat's left behind can be the strangest thing in the universe: a black hole. A black hole is a place where gravity is SO strong that nothing can climb back out — not even light, the fastest thing there is. Think of space like a trampoline: a bowling ball makes a dip, but a black hole makes a hole so deep nothing can roll back up.\n\nAnd here's the biggest idea of all: the whole universe is stretching, like dough with raisins in it. Every galaxy is a raisin moving away from every other one. Run the movie backwards and everything squeezes together into one tiny, incredibly hot point — the Big Bang, 13.8 billion years ago. We even found its leftover glow, still filling the sky!",
+pilot: "Einstein's big move was realizing gravity isn't a force — it's geometry. Mass curves spacetime, and everything (including light) follows the straightest possible path through the curved landscape. GPS confirms it daily; so did 2015's detection of gravitational waves — ripples in spacetime itself from two black holes colliding a billion light-years away, warping the LIGO detectors by 1/10,000 the width of a proton.\n\nBlack holes are curvature's extreme: within the event horizon, all paths lead inward, full stop. We've now photographed the shadow of two of them — M87*'s, 6.5 billion Suns' worth of mass, and Sagittarius A* at our own galaxy's heart.\n\nZoom out: the universe expanded from a hot dense state 13.8 billion years ago, and the cosmic microwave background is its baby picture — light released 380,000 years in, still arriving. The unsettling ledger: normal matter is ~5% of the universe. Dark matter (~27%) holds galaxies together; dark energy (~68%) is accelerating the expansion. We've named 95% of the cosmos without knowing what it is.",
+engineer: "Get quantitative. Schwarzschild radius from setting escape velocity to c: r_s = 2GM/c² — 3 km per solar mass. Density at horizon scales as 1/M², so a supermassive black hole's 'surface' density is below water's: falling through M87*'s horizon would be locally unremarkable.\n\nGravitational time dilation: dτ/dt = √(1 − r_s/r). GPS satellites at r = 26,600 km run fast by 45 μs/day from this term alone — engineering fact, not philosophy.\n\nStellar structure is a fight: pressure vs. gravity. Fusion holds the line for ~10¹⁰ yr (M/M☉)⁻²·⁵ — massive stars burn fast. Endpoints sort by mass: electron degeneracy holds white dwarfs below the Chandrasekhar limit (1.4 M☉ — derivable from relativistic Fermi gas scaling), neutron degeneracy plus nuclear repulsion holds neutron stars to ~2.2 M☉, and beyond that nothing known intervenes.\n\nCosmology in one equation — Friedmann: H² = (8πG/3)ρ − k/a² + Λ/3. Measure H₀ (~70 km/s/Mpc), count the densities, and the universe's history and fate fall out. The CMB's acoustic peaks fix the budget to percent precision: flat, 5/27/68.",
+phd: "Where the field actually is: The Kerr metric is fully specified by (M, J) — the no-hair conjecture — and its observational tests are maturing fast: EHT's M87* and Sgr A* shadow diameters match Kerr photon-ring predictions to ~10%; the next decade's target is the n=1 photon subring via space-VLBI, a genuinely clean null test. LIGO-Virgo-KAGRA ringdown spectroscopy (quasinormal mode frequencies vs. Kerr's ℓmn spectrum) constrains deviations at the ~10% level per event, improving as O4/O5 catalogs stack.\n\nThe Hubble tension is now the field's central anomaly: early-universe inference (Planck + ΛCDM: 67.4 ± 0.5) vs. late-universe ladders (SH0ES Cepheid-SN: 73.0 ± 1.0) disagree at ~5σ. JWST-recalibrated Cepheids held; TRGB-based ladders (Freedman) land uncomfortably between. Proposed resolutions — early dark energy, extra N_eff, evolving electron mass — all strain other datasets; DESI's 2024–25 BAO results hinting at evolving w(z) may be the first crack in Λ itself.\n\nMeanwhile the S₈ tension (weak lensing vs. CMB clustering amplitude) sits at 2–3σ, and JWST's early massive galaxies at z > 10 pressure ΛCDM's star-formation efficiency assumptions more than its expansion history. The honest summary: ΛCDM fits almost everything with 6 parameters, and its two dominant components remain unidentified — parametrization masquerading as understanding, which is precisely what makes this the best moment in a generation to be doing cosmology.",
+},
+quiz: {
+cadet: "Astro quiz! 🕳️\n\n1) What happens if you shine a flashlight INTO a black hole? Does the light come back?\n\n2) The universe is stretching like rising dough. What do we call the moment it all started?\n\n3) When a giant star runs out of fuel, what does it do?\n\nSend your answers, star student!",
+pilot: "Quiz — astrophysics:\n\n1) Einstein said gravity isn't a force. What is it instead, and what did LIGO detect in 2015 that proved spacetime itself can ripple?\n\n2) Why does a photo of a black hole show a bright ring with a dark center — what is the dark part?\n\n3) Dark matter and dark energy: which one holds galaxies together, and which one pushes the universe apart faster?\n\nTransmit answers for grading.",
+engineer: "Quiz — engineering track:\n\n1) Derive r_s = 2GM/c² from escape-velocity reasoning and compute it for Sgr A* (4.15×10⁶ M☉). Then show why horizon-average density falls as 1/M².\n\n2) A clock orbits at r = 3r_s. Compute dτ/dt from the Schwarzschild metric (ignore velocity terms). \n\n3) Sketch why the Chandrasekhar mass emerges when electron Fermi momentum goes relativistic — what changes in the pressure–density scaling, and why does that make 1.4 M☉ a cliff rather than a slope?\n\nShow your work.",
+phd: "Quiz — research track:\n\n1) Write the Kerr photon-ring radius for prograde/retrograde orbits vs. spin a*, and explain what a measured n=1 subring diameter would test that the n=0 image cannot.\n\n2) Lay out the Hubble tension's systematics budget on the SH0ES side: which three rungs contribute most, what JWST resolved, and why TRGB and Cepheid ladders can disagree while both claim <2% error.\n\n3) The DESI BAO hint of thawing w(z): if w₀ ≈ −0.85, wₐ ≈ −0.7 held up, what happens to the CPL-parametrized fate of the universe, and which independent probe would you prioritize to confirm?\n\nDefend your reasoning."
+},
+fact: {
+cadet: "If you could scoop one teaspoon of a neutron star — a dead star squeezed into a ball the size of a city — that single spoonful would weigh as much as a MOUNTAIN. About a billion tons! Neutron stars spin too: some whirl around 700 times every second, faster than a kitchen blender, flashing radio beams across space like the universe's own lighthouses.",
+pilot: "In 2017, humanity watched two neutron stars collide 130 million light-years away — and heard it too. Gravitational waves arrived first (LIGO), a gamma-ray flash 1.7 seconds later, and telescopes then watched the wreckage glow for weeks as it forged heavy elements. That one event confirmed where much of the universe's gold and platinum comes from: your wedding ring is neutron-star shrapnel.",
+engineer: "GW170817's 1.7-second gamma-ray delay over 130 million light-years constrained the speed of gravitational waves to match light's to one part in 10¹⁵ — instantly killing whole families of modified-gravity dark-energy theories (many predicted c_GW ≠ c). One astronomical coincidence did more theory triage in two seconds than a decade of papers. It also delivered an independent 'standard siren' H₀ measurement — the waveform amplitude gives luminosity distance with no cosmic ladder at all.",
+phd: "The black hole information paradox has quietly transformed: the 2019–20 'island formula' replica-wormhole calculations (Penington; Almheiri et al.) showed the Page curve emerges from semiclassical gravity itself — entanglement entropy of Hawking radiation follows unitarity when you include islands in the entanglement wedge. What remains unsettled is the mechanism's physicality: are replica wormholes bookkeeping in the gravitational path integral or dynamical objects? The computation works in JT gravity and generalizes formally, but 'where is the interior encoded' now splits the field between holographic map advocates and firewall revivalists — with the ER=EPR program claiming the middle."
+}
+},
+habitat: {
+explain: {
+cadet: "Living on a space station is like camping in the strangest place ever! There's no up or down, so astronauts sleep in bags strapped to the wall — otherwise they'd drift around bumping into things all night. Their hair floats. Tears don't fall — they just make a wet blob on your face!\n\nEvery drop of water is precious, so the station recycles EVERYTHING — even pee gets cleaned until it's purer than the water at home. Astronauts say: 'Yesterday's coffee becomes tomorrow's coffee!'\n\nFloating looks fun, but the body gets lazy without gravity — muscles and bones say 'we're not needed!' and start shrinking. So astronauts exercise two hours EVERY day, strapped to special bikes and treadmills with bungee cords so they don't float away mid-run.\n\nThe scariest part is invisible: space rays. Earth's magnetic shield protects us down here, but up there, astronauts sometimes see tiny flashes even with eyes closed — a space particle zipping right through their eyeballs!",
+pilot: "A space station is a submarine turned inside out — keeping pressure in rather than out, in an environment that kills in seconds.\n\nLife support (ECLSS) runs the loops: oxygen is split from water by electrolysis; CO₂ is scrubbed and, via the Sabatier reaction, recombined with hydrogen to recover more water. The ISS recycles ~93% of its water — urine, sweat, and breath moisture all return to the tap.\n\nThe body, meanwhile, quietly falls apart. Without loading, bone loses ~1–1.5% of its mineral density per month (10× the rate of osteoporosis), muscles atrophy, and body fluid shifts headward — puffing faces and, more seriously, squashing eyeballs enough to blur vision (SANS syndrome, a top concern for Mars trips). The countermeasure is brutal repetition: two hours of daily exercise.\n\nRadiation is the deal-breaker at scale: beyond Earth's magnetic field, galactic cosmic rays — atom nuclei at near-light speed — pierce hulls and DNA alike. A Mars round-trip approaches career-limiting dose. Shielding is heavy, water helps, and the honest answer is: unsolved.",
+engineer: "Life support is loop-closure engineering. Water: ISS achieves ~93–98% recovery (urine processor + condensate). Oxygen: electrolysis (~1 kg O₂ per ~0.9 kg water per crew-day); CO₂ scrubbed by regenerable zeolite beds; Sabatier (CO₂ + 4H₂ → CH₄ + 2H₂O, exothermic, Ni catalyst ~400°C) closes part of the O₂ loop, though CH₄ vents overboard — a hydrogen leak in disguise. Full closure needs CO₂ → C + O₂ (Bosch) or bioregenerative loops; both remain TRL-limited.\n\nMetabolic bookkeeping per crew-day: ~0.84 kg O₂ in, ~1.0 kg CO₂ out, ~3.5 kg water, ~14 MJ food energy. Every kg not recycled is a kg launched at $x0,000/kg.\n\nRadiation: LEO crew dose ~0.3 mSv/day (half from trapped protons in the South Atlantic Anomaly); deep space GCR ~1.8 mSv/day (Curiosity RAD data). Aluminum shielding helps solar protons but WORSENS GCR beyond ~20 g/cm² — spallation turns one fast ion into a shower of secondaries. Hydrogen-rich shielding (water, polyethylene) degrades gracefully; mass budgets don't.\n\nArtificial gravity trade: comfort studies suggest ≤4 rpm to avoid Coriolis-induced disorientation → 1 g needs r = g/ω² ≈ 56 m at 4 rpm. Hence tethered spin or truss-scale structures — engineering nobody has flown.",
+phd: "The critical-path literature for long-duration flight:\n\nSANS (spaceflight-associated neuro-ocular syndrome): optic disc edema, choroidal folds, hyperopic shifts in ~70% of long-duration crew. Leading model: chronic mild ICP elevation from loss of hydrostatic unloading, but lumbar puncture data are sparse and confounded; countermeasure trials (LBNP, venoconstrictive thigh cuffs) show partial fluid-shift reversal without proven ocular endpoint improvement. This is the top-ranked human-system risk for Mars-class missions precisely because its dose-response with mission duration is uncharacterized beyond ~12 months.\n\nGCR radiobiology: the problem is track structure, not dose. HZE ions deposit energy in dense columns — clustered, hard-to-repair DNA lesions with RBEs for late CNS effects that are essentially unmeasured in humans. NASA's permissible-exposure framework (REID < 3% at 95% CI) produces career limits a Mars mission exceeds; the 2021 NCRP-recommended 600 mSv career standard acknowledges the uncertainty bars dominate the risk calculation. Rodent HZE studies showing cognitive deficits at ~0.25 Gy remain the field's most contested extrapolation.\n\nBone: bisphosphonates + ARED loading roughly zero out DXA-measured loss, but HR-pQCT shows microarchitectural recovery lags densitometric recovery by years post-flight — 'recovered' BMD overstates recovered strength (finite-element failure-load modeling).\n\nClosed-loop ecology: MELiSSA's compartmentalized chemostat approach vs. crop-centric (Veggie/Advanced Plant Habitat) — neither demonstrates multi-year closure; microbial ecosystem stability under radiation and microgravity remains the deep unknown. Biosphere 2's O₂ crash (soil respiration + concrete carbonation) is still the cautionary tale everyone cites and nobody has retired.",
+},
+quiz: {
+cadet: "Station life quiz! 🧑‍🚀\n\n1) Why do astronauts sleep in bags attached to the wall?\n\n2) What happens to yesterday's coffee on the space station? (It's a little gross and very cool.)\n\n3) Why do astronauts have to exercise two whole hours every day?\n\nFloat your answers over!",
+pilot: "Quiz — station life:\n\n1) The ISS recycles about 93% of its water. Name two places recovered water comes from.\n\n2) Why do astronauts' bones weaken in orbit even though they're perfectly healthy? What's the countermeasure?\n\n3) Why is radiation a bigger problem on a Mars trip than on the ISS? (Hint: what does Earth provide at 400 km that it can't at 100 million km?)\n\nTransmit answers for grading.",
+engineer: "Quiz — engineering track:\n\n1) Write the Sabatier reaction and explain why the ISS oxygen loop still isn't closed — where does hydrogen leave the system?\n\n2) A 4-person crew, 900-day Mars mission, no recycling: estimate total water mass required at 3.5 kg/person/day. Now at 95% loop closure. What does that mass delta buy you in shielding?\n\n3) Why does aluminum shielding beyond ~20 g/cm² INCREASE effective GCR dose? Name the interaction and the better material class.\n\n4) Artificial gravity at 1 g and 4 rpm: compute the required spin radius.\n\nNumbers, please.",
+phd: "Quiz — research track:\n\n1) Critique NASA's REID-based career-limit framework: which uncertainty term dominates the 95% CI for GCR-induced cancer risk, and why do rodent HZE-RBE extrapolations inflate rather than shrink it?\n\n2) For SANS: lay out the ICP-hypothesis causal chain and identify the weakest measured link. Design the minimal experiment (instrument + cohort) that would falsify it.\n\n3) DXA says post-flight BMD recovers in ~1–2 years; HR-pQCT + FE modeling disagree about strength. Reconcile — what does areal densitometry miss structurally?\n\n4) Biosphere 2's oxygen decline: identify both sinks and explain why the CO₂ signature initially masked the diagnosis.\n\nFull arguments expected."
+},
+fact: {
+cadet: "Astronauts get TALLER in space — up to 5 centimeters! Without gravity squishing it down, the spine relaxes and streeeetches out. But when they come home, they shrink back in a few months. Also: you can't cry properly in space (tears just ball up on your face), you can't burp (gas and liquid won't separate in your stomach!), and pepper has to be liquid — floating pepper flakes would fly into everyone's eyes!",
+pilot: "Scott Kelly spent 340 days in orbit while his identical twin Mark stayed on Earth — the perfect controlled experiment. NASA's Twins Study found Scott's gene expression shifted (~7% of expression changes persisted 6 months after landing), his telomeres unexpectedly LENGTHENED in flight then crashed on return, and his cognitive speed dipped post-flight. One year in space measurably rewrites the body's operating state — most of it reverses, not all of it.",
+engineer: "The ISS's Water Recovery System pushes ~98% closure in recent configurations, but the interesting number is what the last 2% costs: the urine processor runs distillation in a rotating drum (no gravity to separate steam from brine), fights calcium sulfate precipitation — astronaut bone loss literally scales up the mineral load in urine and once clogged the system — and burns ~1 kWh per liter recovered. Every 'simple' loop closure in space engineering hides a gravity assumption that must be re-engineered from scratch.",
+phd: "The most underappreciated result from ISS microbiology: the station has a resident microbiome that is measurably evolving. Isolates of Enterobacter and Staphylococcus from station surfaces show enhanced biofilm formation and, in some strains, increased antibiotic resistance relative to ground relatives — under continuous selection from desiccation, radiation, and cleaning agents. For multi-year missions the implication inverts the usual sterility paradigm: you cannot eliminate the microbial ecosystem, so you must MANAGE its evolution — probiotic surface strategies and deliberate microbiome seeding are now serious proposals in the closed-habitat literature (and MELiSSA's stability problem is the same problem wearing different clothes)."
+}
+},
+solar: {
+explain: {
+cadet: "Our Sun looks calm and friendly, but up close it's a raging ball of storms! Sometimes it 'sneezes' — a solar flare — a flash brighter than a billion lightning bolts. And sometimes it hurls a giant blob of itself into space, billions of tons of glowing gas, faster than a million kilometers per hour!\n\nDon't worry: Earth has a superpower — an invisible magnetic shield wrapped all around it. When the Sun's storms hit our shield, most of the blast slides around us. But some sneaks in near the North and South Poles, and when it touches the air... the sky DANCES. Green and purple curtains of light ripple overhead — the auroras! Auroras are what a blocked solar storm looks like.\n\nAstronauts have to be careful though. When the Sun gets stormy, they can shelter in the thickest part of their station, like a storm cellar in the sky. Scientists watch the Sun all day, every day, with special telescopes — they're the weather forecasters of space!",
+pilot: "The Sun's surface is a forest of magnetic field lines, constantly twisted by the churning plasma beneath. When twisted fields snap and reconnect, the energy release is a solar flare — X-ray flashes reaching Earth in 8 minutes. Often the snap also flings a coronal mass ejection (CME): a billion tons of magnetized plasma at 1–3,000 km/s, arriving in 1–3 days.\n\nWhat happens next depends on magnetic geometry: if the CME's field points opposite Earth's, it unzips our magnetosphere and pours energy in — a geomagnetic storm. Auroras surge toward the equator, satellite orbits decay as the heated atmosphere puffs up (Starlink lost 38 satellites to one modest storm in 2022), GPS accuracy degrades, and currents induced in the ground can trip power grids — Québec went dark for 9 hours in 1989.\n\nThe benchmark is the 1859 Carrington Event: auroras seen in Cuba, telegraph wires sparking. A repeat today would be a trillion-dollar problem — which is why spacecraft at L1 stand permanent watch, giving Earth 15–60 minutes of warning of what's about to hit.",
+engineer: "The numbers that matter. Flares classify logarithmically by 1–8 Å X-ray flux: C, M, X classes each 10× the last; X10 = 10⁻³ W/m². Photons arrive in 8 minutes (radio blackouts, dayside ionosphere D-layer absorption); solar energetic particles (SEPs) in tens of minutes (the astronaut/avionics threat); the CME plasma itself in 1–3 days.\n\nStorm severity is gauged by Dst (ring-current strength): below −100 nT is severe; Carrington estimated near −900. Coupling efficiency hinges on southward IMF Bz — the half of the interplanetary field's clock angle that permits dayside reconnection.\n\nSpacecraft effects, by mechanism: (1) Single-event upsets — an ion track flips a memory bit; mitigated by triple-modular redundancy and rad-hard parts (10⁶ transistors of margin cost 10× price and 2 generations of performance). (2) Surface/deep dielectric charging during electron storms — discharge arcs kill more satellites than SEUs. (3) Drag: thermospheric density at 400 km can rise 2–10× in hours during storms (F10.7 and ap driven), scrambling every conjunction screening. (4) Degraded solar arrays: ~2–3% power loss per major proton event.\n\nCrew dose: a Carrington-class SEP event behind 20 g/cm² shielding is survivable; the same event in a thin-walled EVA suit approaches radiation-sickness thresholds. Storm-shelter mass is a first-order Mars vehicle design driver.",
+phd: "Three open problems run this field.\n\nCoronal heating & the reconnection rate: the corona sits at MK temperatures above a 6,000 K photosphere; wave heating (Alfvénic turbulence, confirmed abundant by Parker Solar Probe inside 20 R☉) vs. nanoflare reconnection (Parker's braiding hypothesis) both survive contact with data — PSP's switchbacks (kinked magnetic funnels, likely interchange-reconnection products) suggest the distinction may be false at the source. Fast reconnection itself — rates ~0.1 v_A regardless of Lundquist number — required abandoning Sweet–Parker for plasmoid-mediated and kinetic regimes; laboratory confirmation (MRX) and magnetosheath in-situ measurements (MMS electron-diffusion-region crossings) mark real progress.\n\nSEP acceleration: diffusive shock acceleration at CME-driven shocks explains gradual events' spectra to first order, but the seed-population problem (why prior activity primes big events), flare-accelerated impulsive components (³He enrichments ×10³–10⁴), and cross-field transport all limit predictive skill. Practical ceiling: all-clear forecasting — the operationally crucial product — still runs ~50% false-alarm rates.\n\nThe dynamo & prediction: the solar cycle emerges from a flux-transport dynamo (differential rotation Ω-effect + helical convection α-effect + meridional circulation), but cycle-amplitude prediction remains marginally better than climatology — polar-field precursor methods got Cycle 25's modest amplitude roughly right, yet the field cannot say whether a Maunder-type grand minimum has a predictable onset. Extreme-event statistics lean on cosmogenic isotopes: the 774 CE Miyake event implies SEP fluences ~40–50× Carrington, at unknown recurrence — the tail risk every infrastructure hardening argument ultimately rests on.",
+},
+quiz: {
+cadet: "Sun quiz! ☀️\n\n1) What is the beautiful dancing light near the North Pole called, and what makes it glow?\n\n2) When the Sun throws a giant storm at us, what invisible superpower protects the Earth?\n\n3) Where do astronauts hide during a big solar storm?\n\nBeam your answers over!",
+pilot: "Quiz — solar weather:\n\n1) A flare's light reaches Earth in 8 minutes, but the CME plasma takes 1–3 days. Why does that difference give us a fighting chance?\n\n2) Why did Starlink lose 38 brand-new satellites to a mild geomagnetic storm in 2022? (Hint: what happens to the upper atmosphere.)\n\n3) What happened to telegraph systems during the 1859 Carrington Event, and what modern system is the equivalent worry?\n\nTransmit answers for grading.",
+engineer: "Quiz — engineering track:\n\n1) An X5 flare: what's its X-ray flux in W/m²? How much bigger is that than a C5?\n\n2) Explain why southward IMF Bz is the master variable for storm coupling — what process does it enable at the dayside magnetopause?\n\n3) Rank the three main storm-related satellite failure mechanisms (SEU, dielectric charging, drag) by actual fleet-loss statistics, and name one mitigation for each.\n\n4) Thermospheric density doubles at 400 km during a storm. What happens to a conjunction assessment made yesterday?\n\nShow reasoning.",
+phd: "Quiz — research track:\n\n1) Sweet–Parker reconnection scales as S^(−1/2) with Lundquist number — show why that predicts absurd coronal flare timescales, and outline the plasmoid-instability resolution.\n\n2) PSP switchbacks: present the interchange-reconnection origin argument and one observational test that could kill it.\n\n3) The 774 CE Miyake event: given ~40× Carrington SEP fluence, sketch the atmospheric ¹⁴C production chain that records it, and derive what recurrence-rate bound the tree-ring record can and cannot give you.\n\n4) Why do polar-field precursor methods beat dynamo-model-based cycle predictions? What does that say about where the predictability actually lives?\n\nDefend your answers."
+},
+fact: {
+cadet: "The light you see from the Sun is older than you think! A particle of light born in the Sun's center takes up to 100,000 YEARS to bounce its way out to the surface — it's so crowded in there, it can't fly straight. But once it escapes, it zooms to Earth in just 8 minutes. So sunshine is ancient light on the last sprint of a very, very long journey!",
+pilot: "In 1967, at the height of the Cold War, a huge solar flare jammed American early-warning radars — the exact signature of deliberate enemy jamming. The Air Force began preparing a response before newly-minted space-weather forecasters identified the true culprit: the Sun. Solar storm forecasting may have prevented a war. It remains the best argument that watching the Sun is a matter of planetary security.",
+engineer: "GPS positioning degrades during solar storms through a specific chain: storm-time ionospheric TEC (total electron content) becomes spatially turbulent, single-frequency receivers can't model the delay, and range errors grow from meters to tens of meters — while scintillation (Fresnel-scale plasma irregularities) can break carrier lock entirely near the equatorial anomaly and auroral zones. Dual-frequency receivers cancel the first-order ionospheric term (delay ∝ 1/f²) — which is why safety-critical aviation augmentation systems (WAAS/EGNOS) went dual-frequency and why the 2024 May storms produced agricultural GPS outages (single-frequency RTK) but not aviation ones.",
+phd: "The Miyake events deserve more attention than they get: at least six spikes in tree-ring ¹⁴C (774, 993, ~660 BCE, others emerging) imply SEP events 1–2 orders of magnitude beyond anything in the instrumental era. The uncomfortable inference chain: (1) the Sun produces superflares at centennial-to-millennial cadence, (2) Kepler statistics of solar-type stars independently support superflare occurrence on Sun-like rotators, and (3) no operational forecasting framework, grid-hardening standard, or spacecraft design margin currently prices in a 10× Carrington event — the tail is empirically real and formally outside every planning envelope. The 2024 Gannon storm, the strongest in 20 years, was ~1% of a Miyake fluence."
+}
+},
+comms: {}
+};
+
+const GENERIC = {
+  cadet: "Message received, Cadet! In demo mode my big space brain is asleep — but the console buttons are full of real space knowledge. Try a Deep Dive or a Quiz!",
+  pilot: "Signal received. In demo mode my full reasoning engine is offline — wire callAnthropic() to your backend for live Claude. Meanwhile, the console buttons are stocked with real physics at every clearance level.",
+  engineer: "Transmission acknowledged. Demo mode: canned responses only. Connect the Anthropic API for live derivations. The Deep Dive / Quiz buttons carry the full leveled content.",
+  phd: "Acknowledged. This is a simulated response path; the live inference channel requires the backend proxy. Leveled reference content remains available via console operations."
+};
+
+function demoResponse(prompt){
+  return new Promise(res => {
+    const m = prompt.match(/^__(\w+)__(\w+)__$/);
+    const text = m ? DEMO[m[1]][m[2]][currentLevel] : GENERIC[currentLevel];
+    setTimeout(() => res(text), 700 + Math.random() * 600);
+  });
+}
+
+/* ================================================================
+   PANELS + CONSOLE
+================================================================ */
+const PANELS = {
+  propulsion: { title: 'Propulsion Lab', icon: '🚀',
+    desc: 'Rocket physics from first principles to beamed light sails — calibrated to your clearance.' },
+  satellites: { title: 'Orbital Mechanics Deck', icon: '🛰️',
+    desc: 'From falling cannonballs to Lagrange-point halo orbits — calibrated to your clearance.' },
+  exploration: { title: 'Deep Space Observatory', icon: '🔭',
+    desc: 'Probes, ocean worlds, exoplanet atmospheres, the search for life — calibrated to your clearance.' },
+  astro: { title: 'Astrophysics Core', icon: '🕳️',
+    desc: 'Black holes, relativity, the birth and fate of the universe — calibrated to your clearance.' },
+  habitat: { title: 'Station Life Deck', icon: '🧑‍🚀',
+    desc: 'Life support, the human body in microgravity, and how crews survive aboard stations — calibrated to your clearance.' },
+  solar: { title: 'Solar Weather Deck', icon: '☀️',
+    desc: 'Flares, coronal mass ejections, auroras, and the storms that threaten every spacecraft — calibrated to your clearance.' },
+  comms: { title: 'Comms — Station AI', icon: '📡',
+    desc: 'Open channel. Ask the Station AI anything — it answers at your clearance level.' }
+};
+const ACTIONS = { explain: 'Deep Dive', quiz: 'Quiz Me', fact: 'Random Insight' };
+const WELCOME = {
+  cadet: 'Welcome aboard, Cadet! Pick a button and let’s explore. No question is too small.',
+  pilot: 'Console ready. Select an operation, or transmit a question.',
+  engineer: 'Console ready. Operations calibrated for quantitative treatment. Transmit when ready.',
+  phd: 'Console ready. Research-grade briefings enabled. Derivations on request.'
+};
+let currentDomain = null;
+
+function openPanel(domain){
+  currentDomain = domain;
+  const p = PANELS[domain];
+  document.getElementById('p-title').textContent = p.icon + '  ' + p.title;
+  document.getElementById('p-desc').textContent = p.desc;
+  document.getElementById('p-lvlbadge').textContent = LEVELS[currentLevel].name.toUpperCase();
+  const acts = document.getElementById('p-actions');
+  acts.innerHTML = '';
+  if (domain !== 'comms') {
+    for (const [key, label] of Object.entries(ACTIONS)) {
+      const b = document.createElement('button');
+      b.className = 'abtn'; b.textContent = label;
+      b.onclick = () => transmit(label + ' — ' + p.title, '__' + domain + '__' + key + '__');
+      acts.appendChild(b);
+    }
+  }
+  document.getElementById('p-feed').innerHTML = '';
+  addMsg('ai', domain === 'comms'
+    ? 'Channel open. ' + WELCOME[currentLevel]
+    : WELCOME[currentLevel], true);
+  document.getElementById('panel').classList.add('open');
+  document.getElementById('title').style.opacity = 0.15;
+  setTimeout(() => document.getElementById('p-q').focus(), 450);
+}
+function closePanel(){
+  document.getElementById('panel').classList.remove('open');
+  document.getElementById('title').style.opacity = 1;
+}
+addEventListener('keydown', e => { if (e.key === 'Escape') closePanel(); });
+
+function addMsg(role, text, instant){
+  const feed = document.getElementById('p-feed');
+  const d = document.createElement('div');
+  d.className = 'msg ' + role;
+  d.innerHTML = '<div class="who">' + (role === 'user' ? 'You' : 'Station AI') + '</div><div class="body"></div>';
+  feed.appendChild(d);
+  const body = d.querySelector('.body');
+  if (instant || role === 'user') body.textContent = text;
+  else typewrite(body, text);
+  d.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  return d;
+}
+
+function typewrite(el, text){
+  let i = 0;
+  const cur = document.createElement('span'); cur.className = 'cursor';
+  el.after(cur);
+  const step = Math.max(1, Math.round(text.length / 300));
+  (function tick(){
+    i = Math.min(text.length, i + step);
+    el.textContent = text.slice(0, i);
+    el.parentElement.scrollIntoView({ block: 'end' });
+    if (i < text.length) setTimeout(tick, 13);
+    else cur.remove();
+  })();
+}
+
+async function transmit(displayText, prompt){
+  addMsg('user', displayText);
+  const th = addMsg('ai', '', true);
+  th.querySelector('.body').textContent = '▪ receiving transmission…';
+  try {
+    const reply = await callAnthropic(prompt);
+    th.querySelector('.body').textContent = '';
+    typewrite(th.querySelector('.body'), reply);
+  } catch (e) {
+    th.querySelector('.body').textContent = '⚠ ' + e.message;
+  }
+}
+
+function sendFree(){
+  const q = document.getElementById('p-q');
+  const v = q.value.trim(); if (!v) return;
+  q.value = '';
+  transmit(v, v);
+}
+document.getElementById('p-q').addEventListener('keydown', e => { if (e.key === 'Enter') sendFree(); });
+</script>
+</body>
+</html>
